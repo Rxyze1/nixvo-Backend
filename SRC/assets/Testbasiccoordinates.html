@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+
+<title>Nixvo Certificate of Skill</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Pinyon+Script&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:wght@300;400;500;600;700&family=Montserrat:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #0a0a0a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Montserrat', sans-serif;
+}
+
+/* ── A4 landscape 960 × 679 px ── */
+.cert {
+  position: relative;
+  width: 960px;
+  height: 679px;
+  overflow: hidden;
+  box-shadow:
+    0 30px 80px rgba(0,0,0,0.9),
+    0 0 60px rgba(212,175,55,0.06),
+    inset 0 0 80px rgba(0,0,0,0.15);
+  flex-shrink: 0;
+  border: 1px solid rgba(212,175,55,0.08);
+}
+.cert img.bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+/* ── subtle vignette overlay for depth ── */
+.overlay {
+  position: absolute;
+  inset: 0;
+}
+.overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 55% 50%, transparent 40%, rgba(0,0,0,0.18) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── ambient gold glow behind name area ── */
+.overlay::after {
+  content: '';
+  position: absolute;
+  top: 200px;
+  left: 350px;
+  width: 400px;
+  height: 120px;
+  background: radial-gradient(ellipse, rgba(212,175,55,0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Serial ── */
+.serial {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 7.5px;
+  font-weight: 600;
+  color: rgba(212,175,55,0.42);
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  z-index: 1;
+  text-shadow: 0 0 8px rgba(212,175,55,0.1);
+}
+
+/* ══════════════════════════════════════
+   CERTIFICATE  /  OF SKILL
+   ══════════════════════════════════════ */
+.title-block {
+  position: absolute;
+  top: 48px;
+  right: 30px;
+  text-align: right;
+  z-index: 1;
+}
+.cert-title {
+  display: block;
+  font-family: 'Cinzel', serif;
+  font-size: 36px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 8px;
+  line-height: 1;
+  text-shadow:
+    0 1px 2px rgba(0,0,0,0.5),
+    0 0 40px rgba(255,255,255,0.04);
+}
+.cert-sub {
+  display: block;
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(195,190,180,0.7);
+  letter-spacing: 10px;
+  margin-top: 4px;
+  text-shadow: 0 0 12px rgba(195,190,180,0.08);
+}
+.title-underline {
+  margin-top: 8px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212,175,55,0.5));
+  box-shadow: 0 0 6px rgba(212,175,55,0.15);
+}
+
+/* ══════════════════════════════════════
+   MAIN CONTENT
+   ══════════════════════════════════════ */
+.content {
+  position: absolute;
+  left: 260px;
+  width: 590px;
+  top: 150px;
+  height: 350px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  z-index: 1;
+}
+
+/* ── decorative flourish above "Proudly Presented To" ── */
+.flourish-top {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.35;
+}
+.flourish-top .fl-line {
+  width: 60px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent);
+}
+.flourish-top .fl-diamond {
+  font-size: 6px;
+  color: rgba(212,175,55,0.7);
+}
+
+.presented {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: rgb(236, 236, 236);
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  margin-bottom: 13px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* NAME */
+.name {
+  font-family: 'Pinyon Script', cursive;
+  font-size: 70px;
+  color: #d4af37;
+  line-height: 1;
+  white-space: nowrap;
+  filter: drop-shadow(0 2px 12px rgba(238,194,50,0.38));
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+  text-shadow:
+    0 0 20px rgba(212,175,55,0.25),
+    0 0 50px rgba(212,175,55,0.08),
+    0 2px 4px rgba(0,0,0,0.5);
+  background: linear-gradient(
+    180deg,
+    #e8d07a 0%,
+    #d4af37 35%,
+    #c49a2f 60%,
+    #d4af37 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── decorative flourish below name ── */
+.flourish-bottom {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0.3;
+}
+.flourish-bottom .fl-line {
+  width: 80px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212,175,55,0.6), transparent);
+}
+.flourish-bottom .fl-ornament {
+  font-size: 10px;
+  color: rgba(212,175,55,0.65);
+  letter-spacing: 4px;
+}
+
+.skill-name {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(190,185,172,0.68);
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  text-shadow: 0 0 8px rgba(190,185,172,0.06);
+}
+
+.desc {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: rgba(233,230,226,0.88);
+  line-height: 1.4;
+  max-width: 560px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+/* ══════════════════════════════════════
+   BOTTOM ROW
+   ══════════════════════════════════════ */
+.bottom-row {
+  position: absolute;
+  top: 510px;
+  left: 240px;
+  width: 490px;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 10px;
+  z-index: 1;
+}
+
+.bottom-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 190px;
+}
+
+.date-val {
+  font-family: 'Dancing Script', cursive;
+  font-size: 16px;
+  font-weight: 600;
+  color: #b2aa94;
+  line-height: 1.1;
+  white-space: nowrap;
+  margin-bottom: 5px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.sig-val {
+  font-family: 'Pinyon Script', cursive;
+  font-size: 26px;
+  color: #b2aa94;
+  line-height: 1;
+  white-space: nowrap;
+  margin-bottom: 5px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.bottom-line {
+  width: 130px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(170,162,140,0.35), transparent);
+  margin-bottom: 5px;
+  box-shadow: 0 0 4px rgba(170,162,140,0.06);
+}
+
+.bottom-lbl {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 6.5px;
+  font-weight: 500;
+  color: rgba(80,75,62,0.95);
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+}
+
+/* ── Tier badge ── */
+.tier-badge {
+  position: absolute;
+  top: 650px;
+  left: 240px;
+  width: 490px;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 7px;
+  font-weight: 700;
+  color: rgba(212,175,55,0.22);
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  z-index: 1;
+  text-shadow: 0 0 10px rgba(212,175,55,0.06);
+}
+
+/* ── decorative corner accents ── */
+.corner {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.12;
+}
+.corner::before,
+.corner::after {
+  content: '';
+  position: absolute;
+  background: rgba(212,175,55,0.8);
+}
+.corner-tl { top: 10px; left: 10px; }
+.corner-tl::before { top: 0; left: 0; width: 20px; height: 1px; }
+.corner-tl::after  { top: 0; left: 0; width: 1px; height: 20px; }
+
+.corner-tr { top: 10px; right: 10px; }
+.corner-tr::before { top: 0; right: 0; width: 20px; height: 1px; }
+.corner-tr::after  { top: 0; right: 0; width: 1px; height: 20px; }
+
+.corner-bl { bottom: 10px; left: 10px; }
+.corner-bl::before { bottom: 0; left: 0; width: 20px; height: 1px; }
+.corner-bl::after  { bottom: 0; left: 0; width: 1px; height: 20px; }
+
+.corner-br { bottom: 10px; right: 10px; }
+.corner-br::before { bottom: 0; right: 0; width: 20px; height: 1px; }
+.corner-br::after  { bottom: 0; right: 0; width: 1px; height: 20px; }
+
+/* ── subtle shimmer animation on name ── */
+@keyframes shimmer {
+  0%   { filter: drop-shadow(0 2px 12px rgba(238,194,50,0.30)); }
+  50%  { filter: drop-shadow(0 2px 18px rgba(238,194,50,0.50)); }
+  100% { filter: drop-shadow(0 2px 12px rgba(238,194,50,0.30)); }
+}
+.name {
+  animation: shimmer 4s ease-in-out infinite;
+}
+</style>
+</head>
+<body>
+<div class="cert">
+  <img class="bg" src="../assets/Basic-Certificate.png" alt="Certificate Background">
+
+  <div class="overlay">
+
+    <!-- corner accents -->
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+
+    <div class="serial">NIXVO-BASIC-2026-K9XM2P7A</div>
+
+    <!-- TOP RIGHT: CERTIFICATE / OF SKILL -->
+    <div class="title-block">
+      <span class="cert-title">CERTIFICATE</span>
+      <span class="cert-sub">OF SKILL</span>
+      <div class="title-underline"></div>
+    </div>
+
+    <!-- CENTRE BLOCK -->
+    <div class="content">
+      <div class="flourish-top">
+        <span class="fl-line"></span>
+        <span class="fl-diamond">◆</span>
+        <span class="fl-line"></span>
+      </div>
+      <div class="presented">Proudly Presented To</div>
+      <div class="name">Rudra Majumdar</div>
+      <div class="flourish-bottom">
+        <span class="fl-line"></span>
+        <span class="fl-ornament">· · ·</span>
+        <span class="fl-line"></span>
+      </div>
+      <div class="skill-name">Video Editing &amp; VFX</div>
+      <div class="desc">
+        Awarded in recognition of demonstrated expertise and verified competency in Video Editing &amp; VFX.
+        Issued by Nixvo upon successful completion of the professional skill assessment program.
+      </div>
+    </div>
+
+    <!-- BOTTOM: value → line → label -->
+    <div class="bottom-row">
+      <div class="bottom-item">
+        <div class="date-val">21 March 2026</div>
+        <div class="bottom-line"></div>
+        <div class="bottom-lbl">Date</div>
+      </div>
+      <div class="bottom-item">
+        <div class="sig-val">Rudra Majumdar</div>
+        <div class="bottom-line"></div>
+        <div class="bottom-lbl">Founder, Nixvo</div>
+      </div>
+    </div>
+
+    <div class="tier-badge">✦ &nbsp; B A S I C &nbsp; C E R T I F I C A T E &nbsp; ✦</div>
+
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Nixvo Pro Certificate of Skill</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Pinyon+Script&family=Cinzel:wght@400;600;700&family=Cormorant+Garamond:wght@300;400;500;600;700&family=Montserrat:wght@300;400;500;600;700&family=Dancing+Script:wght@500;600;700&display=swap" rel="stylesheet">
+
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #0a0a0a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Montserrat', sans-serif;
+}
+
+.cert {
+  position: relative;
+  width: 960px;
+  height: 679px;
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow:
+    0 30px 80px rgba(0,0,0,0.9),
+    0 0 100px rgba(180,140,40,0.04),
+    0 0 1px rgba(212,175,55,0.15);
+  border: 1px solid rgba(212,175,55,0.05);
+}
+.cert img.bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── cinematic vignette ── */
+.overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 38%, transparent 30%, rgba(0,0,0,0.20) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── warm spotlight behind name ── */
+.overlay::after {
+  content: '';
+  position: absolute;
+  top: 195px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 360px;
+  height: 90px;
+  background: radial-gradient(ellipse, rgba(212,175,55,0.05) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── hairline inner border ── */
+.inner-frame {
+  position: absolute;
+  top: 6px; left: 6px; right: 6px; bottom: 6px;
+  border: 1px solid rgba(212,175,55,0.035);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── corner filigree ── */
+.corner {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.11;
+}
+.corner::before, .corner::after {
+  content: '';
+  position: absolute;
+}
+.corner-tl { top: 14px; left: 14px; }
+.corner-tl::before { width: 22px; height: 1px; background: linear-gradient(90deg, rgba(212,175,55,0.9), transparent); }
+.corner-tl::after  { width: 1px; height: 22px; background: linear-gradient(180deg, rgba(212,175,55,0.9), transparent); }
+
+.corner-tr { top: 14px; right: 14px; }
+.corner-tr::before { right: 0; width: 22px; height: 1px; background: linear-gradient(270deg, rgba(212,175,55,0.9), transparent); }
+.corner-tr::after  { right: 0; width: 1px; height: 22px; background: linear-gradient(180deg, rgba(212,175,55,0.9), transparent); }
+
+.corner-bl { bottom: 14px; left: 14px; }
+.corner-bl::before { bottom: 0; width: 22px; height: 1px; background: linear-gradient(90deg, rgba(212,175,55,0.9), transparent); }
+.corner-bl::after  { bottom: 0; width: 1px; height: 22px; background: linear-gradient(0deg, rgba(212,175,55,0.9), transparent); }
+
+.corner-br { bottom: 14px; right: 14px; }
+.corner-br::before { right: 0; bottom: 0; width: 22px; height: 1px; background: linear-gradient(270deg, rgba(212,175,55,0.9), transparent); }
+.corner-br::after  { right: 0; bottom: 0; width: 1px; height: 22px; background: linear-gradient(0deg, rgba(212,175,55,0.9), transparent); }
+
+/* ── Serial ── */
+.serial {
+  position: absolute;
+  top: 20px;
+  right: 22px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 8px;
+  font-weight: 600;
+  color: rgba(212,175,55,0.45);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  z-index: 1;
+  text-shadow: 0 0 8px rgba(212,175,55,0.08);
+}
+
+/* ══════════════════════════════════════════
+   MAIN CONTENT
+   ══════════════════════════════════════════ */
+.content {
+  position: absolute;
+  top: 135px; bottom: 1px;
+  height: 244px;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0;
+  z-index: 1;
+}
+
+.nixvo-tag {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+  color: rgba(255,255,255,0.32);
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  margin-bottom: 7px;
+  max-width: 460px;
+  text-shadow: 0 0 16px rgba(255,255,255,0.03);
+}
+
+.cert-title {
+  font-family: 'Cinzel', serif;
+  font-size: 34px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 8px;
+  line-height: 1;
+  margin-bottom: 2px;
+  max-width: 480px;
+  text-shadow:
+    0 2px 20px rgba(255,255,255,0.06),
+    0 0 60px rgba(255,255,255,0.02),
+    0 1px 3px rgba(0,0,0,0.5);
+}
+
+.cert-sub {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(195,190,178,0.72);
+  letter-spacing: 10px;
+  margin-bottom: 10px;
+  max-width: 460px;
+  text-shadow: 0 0 10px rgba(195,190,178,0.05);
+}
+
+/* ── gold divider with ornament ── */
+.gold-line {
+  width: 180px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #d4af37 30%, #f5e07a 50%, #d4af37 70%, transparent);
+  margin: 0 auto 10px;
+  box-shadow: 0 0 8px rgba(212,175,55,0.15);
+  position: relative;
+}
+.gold-line::before {
+  content: '✦';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 6px;
+  color: rgba(212,175,55,0.5);
+  text-shadow: 0 0 4px rgba(212,175,55,0.3);
+  background: rgba(10,10,10,0.01);
+  padding: 0 5px;
+}
+
+.presented {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(205,200,185,0.65);
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  max-width: 390px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.35);
+}
+
+/* ── Name — liquid gold with sweep animation ── */
+.name {
+  font-family: 'Pinyon Script', cursive;
+  font-size: 64px;
+  color: #d4af37;
+  line-height: 1;
+  white-space: nowrap;
+  margin-bottom: 4px;
+  letter-spacing: 1px;
+  background: linear-gradient(
+    105deg,
+    #b8941e 0%,
+    #d4af37 20%,
+    #f5e99a 38%,
+    #ffe566 42%,
+    #f5e99a 46%,
+    #d4af37 60%,
+    #b8941e 78%,
+    #d4af37 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 2px 10px rgba(212,175,55,0.35));
+  animation: liquidGold 5s ease-in-out infinite;
+}
+
+@keyframes liquidGold {
+  0%   { background-position: 100% 50%; filter: drop-shadow(0 2px 10px rgba(212,175,55,0.28)); }
+  50%  { background-position: 0% 50%;   filter: drop-shadow(0 3px 18px rgba(212,175,55,0.50)); }
+  100% { background-position: 100% 50%; filter: drop-shadow(0 2px 10px rgba(212,175,55,0.28)); }
+}
+
+.name-line {
+  width: 260px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212,175,55,0.4), transparent);
+  margin: 0 auto 8px;
+  box-shadow: 0 0 6px rgba(212,175,55,0.06);
+}
+
+.skill-label {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 7.5px;
+  font-weight: 600;
+  color: rgba(150,145,132,0.7);
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+  max-width: 300px;
+}
+
+.skill-name {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 4px;
+  margin-bottom: 10px;
+  max-width: 340px;
+  text-shadow:
+    0 0 18px rgba(255,255,255,0.05),
+    0 1px 2px rgba(0,0,0,0.4);
+}
+
+.desc {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: rgba(165, 159, 148, 0.88);
+  line-height: 1.85;
+  max-width: 400px;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+/* ══════════════════════════════════════════
+   BOTTOM ROW
+   ══════════════════════════════════════════ */
+.bottom-row {
+  position: absolute;
+  top: 505px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 290px;
+  z-index: 1;
+}
+
+.bottom-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 150px;
+}
+
+.date-val {
+  font-family: 'Dancing Script', cursive;
+  font-size: 17px;
+  font-weight: 600;
+  color: #b5ae98;
+  line-height: 1.1;
+  white-space: nowrap;
+  margin-bottom: 5px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  background: linear-gradient(180deg, #f5e07a 0%, #e2c154 40%, #c4a030 65%, #e2c154 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 1px 5px rgba(212,175,55,0.22));
+}
+
+/* ── signature gets its own gold gradient ── */
+.sig-val {
+  font-family: 'Pinyon Script', cursive;
+  font-size: 28px;
+  line-height: 1;
+  white-space: nowrap;
+  margin-bottom: 5px;
+  background: linear-gradient(180deg, #f5e07a 0%, #e2c154 40%, #c4a030 65%, #e2c154 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 1px 5px rgba(212,175,55,0.22));
+}
+
+.bottom-line {
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(165,158,138,0.38), transparent);
+  margin-bottom: 4px;
+  box-shadow: 0 0 3px rgba(165,158,138,0.04);
+}
+
+.bottom-lbl {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 6.5px;
+  font-weight: 500;
+  color: rgba(80,75,62,0.9);
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+}
+
+/* ── Tier badge ── */
+.tier-badge {
+  position: absolute;
+  top: 460px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 7.5px;
+  font-weight: 700;
+  color: rgba(212,175,55,0.30);
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  z-index: 1;
+  text-shadow: 0 0 8px rgba(212,175,55,0.05);
+}
+
+/* ══════════════════════════════════════════
+   FLOATING GOLD MOTES
+   ══════════════════════════════════════════ */
+.mote {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+.m1 { width: 2px; height: 2px; top: 90px;  left: 430px; background: rgba(212,175,55,0.22); animation: drift 7s ease-in-out infinite 0s; }
+.m2 { width: 1.5px; height: 1.5px; top: 130px; left: 530px; background: rgba(212,175,55,0.18); animation: drift 9s ease-in-out infinite 1.5s; }
+.m3 { width: 2px; height: 2px; top: 280px; left: 400px; background: rgba(212,175,55,0.20); animation: drift 8s ease-in-out infinite 3s; }
+.m4 { width: 1.5px; height: 1.5px; top: 300px; left: 555px; background: rgba(212,175,55,0.15); animation: drift 10s ease-in-out infinite 2s; }
+.m5 { width: 1px; height: 1px; top: 170px; left: 360px; background: rgba(212,175,55,0.20); animation: drift 8s ease-in-out infinite 4.5s; }
+.m6 { width: 1px; height: 1px; top: 200px; left: 590px; background: rgba(212,175,55,0.16); animation: drift 11s ease-in-out infinite 0.5s; }
+.m7 { width: 1.5px; height: 1.5px; top: 250px; left: 470px; background: rgba(212,175,55,0.14); animation: drift 9s ease-in-out infinite 3.5s; }
+
+@keyframes drift {
+  0%, 100% { transform: translateY(0) scale(0.8); opacity: 0.12; }
+  30%      { transform: translateY(-5px) scale(1.2); opacity: 0.4; }
+  60%      { transform: translateY(-2px) scale(1.0); opacity: 0.25; }
+}
+
+/* ══════════════════════════════════════════
+   DECORATIVE SIDE WHISKERS
+   thin gold lines flanking the content
+   ══════════════════════════════════════════ */
+.whisker {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+.whisker-l {
+  top: 180px;
+  left: 280px;
+  width: 45px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(212,175,55,0.12));
+}
+.whisker-r {
+  top: 180px;
+  right: 280px;
+  width: 45px;
+  height: 1px;
+  background: linear-gradient(270deg, transparent, rgba(212,175,55,0.12));
+}
+</style>
+</head>
+<body>
+
+<div class="cert">
+  <img class="bg" src="../assets/Pro-Cetrificate.png" alt="Pro Certificate Background">
+
+  <div class="overlay">
+
+    <!-- decorative layers -->
+    <div class="inner-frame"></div>
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+    <div class="mote m1"></div>
+    <div class="mote m2"></div>
+    <div class="mote m3"></div>
+    <div class="mote m4"></div>
+    <div class="mote m5"></div>
+    <div class="mote m6"></div>
+    <div class="mote m7"></div>
+    <div class="whisker whisker-l"></div>
+    <div class="whisker whisker-r"></div>
+
+    <div class="serial">NIXVO-PRO-2026-A8XK4M2Z</div>
+
+    <!-- MAIN CONTENT -->
+    <div class="content">
+      <div class="nixvo-tag">Nixvo · Verified Professional</div>
+      <div class="cert-title">CERTIFICATE</div>
+      <div class="cert-sub">O F &nbsp;&nbsp; S K I L L</div>
+      <div class="gold-line"></div>
+      <div class="presented">Proudly Presented To</div>
+      <div class="name">Rudra Majumdar</div>
+      <div class="name-line"></div>
+      <div class="skill-label">Certified Skill</div>
+      <div class="skill-name">Video Editing &amp; VFX</div>
+      <div class="desc">
+        Awarded in recognition of demonstrated expertise and verified competency
+        in Video Editing &amp; VFX. Issued by Nixvo upon successful completion
+        of the professional skill assessment program.
+      </div>
+    </div>
+
+    <!-- BOTTOM ROW -->
+    <div class="bottom-row">
+      <div class="bottom-item">
+        <div class="date-val">21 March 2026</div>
+        <div class="bottom-line"></div>
+        <div class="bottom-lbl">Date</div>
+      </div>
+      <div class="bottom-item">
+        <div class="sig-val">Rudra Majumdar</div>
+        <div class="bottom-line"></div>
+        <div class="bottom-lbl">Founder, Nixvo</div>
+      </div>
+    </div>
+
+    <div class="tier-badge">★ &nbsp; P R O &nbsp; C E R T I F I C A T E &nbsp; ★</div>
+
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,88 @@
+# =========================
+# Node.js / JavaScript
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# Next.js
+# =========================
+.next/
+out/
+build/
+.vercel/
+
+# =========================
+# React Native
+# =========================
+android/.gradle/
+android/app/build/
+android/build/
+ios/Pods/
+ios/build/
+*.xcworkspace
+
+# =========================
+# Environment variables
+# =========================
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Editor / IDE
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# Build / Cache
+# =========================
+dist/
+.cache/
+.tmp/
+temp/
+
+# =========================
+# MongoDB
+# =========================
+dump/
+*.bson
+
+# =========================
+# Coverage
+# =========================
+coverage/
+
+# =========================
+# Certificates & Secrets
+# =========================
+*.pem
+*.key
+*.crt
+
+# =========================
+# Misc
+# =========================
+*.tgz
+*.zip
+*.tar.gz

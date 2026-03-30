@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EditCraft — Test Payment</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #050505;
+      color: #e0e0e0;
+      font-family: sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #0d0d0d;
+      border: 1px solid #1a1a1a;
+      border-radius: 16px;
+      padding: 40px;
+      width: 380px;
+      text-align: center;
+    }
+    h2 { color: #fff; font-size: 22px; margin-bottom: 6px; }
+    p  { color: #555; font-size: 13px; margin-bottom: 28px; }
+
+    .plan-box {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 28px;
+      text-align: left;
+    }
+    .plan-box .label { color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+    .plan-box .price { color: #0066FF; font-size: 32px; font-weight: bold; margin: 6px 0 2px; }
+    .plan-box .cycle { color: #444; font-size: 12px; }
+
+    /* ── Input ── */
+    label  { display: block; text-align: left; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+    input  {
+      width: 100%; padding: 10px 14px;
+      background: #111; border: 1px solid #222; border-radius: 8px;
+      color: #ccc; font-size: 13px; margin-bottom: 16px; outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus { border-color: #0066FF; }
+
+    /* ── Button ── */
+    button {
+      width: 100%; padding: 14px;
+      background: #0066FF; color: #fff;
+      border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: background 0.2s;
+    }
+    button:hover    { background: #0052cc; }
+    button:disabled { background: #1a1a1a; color: #444; cursor: not-allowed; }
+
+    /* ── Status ── */
+    #status {
+      margin-top: 20px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      display: none;
+    }
+    #status.success { background: #0a2a0a; border: 1px solid #1a5c1a; color: #4caf50; }
+    #status.error   { background: #2a0a0a; border: 1px solid #5c1a1a; color: #f44336; }
+    #status.info    { background: #0a1a2a; border: 1px solid #1a3a5c; color: #2196f3; }
+
+    .test-card {
+      margin-top: 24px;
+      background: #0d1117;
+      border: 1px solid #1e2a3a;
+      border-radius: 8px;
+      padding: 14px;
+      text-align: left;
+    }
+    .test-card .title { color: #2196f3; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+    .test-card .row   { display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .test-card .key   { color: #444; font-size: 11px; }
+    .test-card .val   { color: #aaa; font-size: 11px; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>EditCraft Premium</h2>
+  <p>Complete your subscription payment</p>
+
+  <div class="plan-box">
+    <div class="label">Plan</div>
+    <div class="price">₹49 or ₹149</div>
+    <div class="cycle">per month · billed monthly</div>
+  </div>
+
+  <label>Razorpay Key</label>
+  <input id="rzpKey" type="text" value="rzp_test_SRe7LGvo3e9VIm" placeholder="rzp_test_..." />
+
+  <label>Subscription ID</label>
+  <input id="subId" type="text" value="sub_SSBAWY11LqJEmD" placeholder="sub_..." />
+
+  <label>Your Email</label>
+  <input id="email" type="email" value="test@test.com" placeholder="your@email.com" />
+
+  <label>Phone</label>
+  <input id="phone" type="text" value="9999999999" placeholder="10-digit number" />
+
+  <button id="payBtn" onclick="pay()">💳 Pay ₹49 — Activate Premium</button>
+
+  <div id="status"></div>
+
+  <div class="test-card">
+    <div class="title">🧪 Test Card Details</div>
+    <div class="row"><span class="key">Card Number</span><span class="val">4111 1111 1111 1111</span></div>
+    <div class="row"><span class="key">Expiry</span><span class="val">Any future date</span></div>
+    <div class="row"><span class="key">CVV</span><span class="val">Any 3 digits</span></div>
+    <div class="row"><span class="key">OTP</span><span class="val">1234</span></div>
+  </div>
+</div>
+
+<script>
+  function showStatus(msg, type) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className   = type;
+    el.style.display = 'block';
+  }
+
+  function pay() {
+    const key   = document.getElementById('rzpKey').value.trim();
+    const subId = document.getElementById('subId').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+
+    if (!key || !subId) {
+      showStatus('❌ Please enter Razorpay Key and Subscription ID', 'error');
+      return;
+    }
+
+    document.getElementById('payBtn').disabled = true;
+    showStatus('⏳ Opening payment...', 'info');
+
+    const options = {
+      key,
+      subscription_id: subId,
+      name:        'EditCraft',
+      description: 'Premium Plan — ₹49/month',
+      image:       'https://i.imgur.com/3g7nmJC.png', // optional logo
+      handler: function(response) {
+        console.log('✅ Payment response:', response);
+        showStatus(
+          `✅ Payment successful!\n` +
+          `Payment ID: ${response.razorpay_payment_id}\n` +
+          `Subscription ID: ${response.razorpay_subscription_id}`,
+          'success'
+        );
+        document.getElementById('payBtn').disabled = false;
+      },
+      prefill: { email, contact: phone },
+      theme:   { color: '#0066FF' },
+      modal: {
+        ondismiss: function() {
+          showStatus('⚠️ Payment cancelled — you can try again', 'error');
+          document.getElementById('payBtn').disabled = false;
+        }
+      }
+    };
+
+    try {
+      const rzp = new Razorpay(options);
+      rzp.on('payment.failed', function(response) {
+        console.error('❌ Payment failed:', response.error);
+        showStatus(`❌ Payment failed: ${response.error.description}`, 'error');
+        document.getElementById('payBtn').disabled = false;
+      });
+      rzp.open();
+    } catch(err) {
+      showStatus(`❌ Error: ${err.message}`, 'error');
+      document.getElementById('payBtn').disabled = false;
+    }
+  }
+</script>
+
+</body>
+</html>
