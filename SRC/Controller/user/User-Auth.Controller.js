@@ -673,14 +673,15 @@ export const logout = async (req, res) => {
     const userId       = req.userId;
 
     logger.info('LOGOUT REQUEST', { userId });
+// ✅ Revoke ALL sessions for this user + fallback for userId
+const resolvedUserId = req.userId ?? req.user?._id;
 
-    if (refreshToken) {
-      await RefreshToken.findOneAndUpdate(
-        { token: refreshToken, userId },
-        { isRevoked: true, revokedAt: new Date() },
-        { new: true }
-      ).catch(() => null);
-    }
+if (resolvedUserId) {
+  await RefreshToken.updateMany(
+    { userId: resolvedUserId, isRevoked: false },
+    { isRevoked: true, revokedAt: new Date() }
+  ).catch(() => null);
+}
 
     res.clearCookie('accessToken',  COOKIE_OPTIONS.ACCESS_TOKEN);
     res.clearCookie('refreshToken', COOKIE_OPTIONS.REFRESH_TOKEN);

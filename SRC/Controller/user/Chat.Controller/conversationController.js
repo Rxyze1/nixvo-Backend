@@ -267,7 +267,7 @@ employees.forEach(doc => {
 
     return {
       ...conv.toObject(),
-      participants: conv.participants.map(p => ({
+      participants: conv.participants.filter(p => p.userId != null).map(p => ({
   ...p.toObject(),
   userId: {
     ...p.userId.toObject(),
@@ -365,7 +365,7 @@ export const getConversation = asyncHandler(async (req, res) => {
 
   const conversationData = {
     ...conversation.toObject(),
-    participants: conversation.participants.map(p => ({
+    participants: conversation.participants.filter(p => p.userId != null).map(p => ({
       ...p.toObject(),
       userId: {
         ...p.userId.toObject(),
@@ -1012,7 +1012,7 @@ employees.forEach(doc => {
 
 const enriched = conversations.map(conv => ({
   ...conv.toObject(),
-  participants: conv.participants.map(p => ({
+  participants: conv.participants.filter(p => p.userId != null).map(p => ({
     ...p.toObject(),
     userId: {
       ...p.userId.toObject(),
