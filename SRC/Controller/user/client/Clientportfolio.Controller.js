@@ -43,13 +43,16 @@ const {
 
 // ✅ ADD THESE
 // Filter by blue verified — must join/lookup Employee
-if (blueVerified !== undefined) {
-  filter['employeeId.blueVerified.status'] = blueVerified === 'true';
-}
+// if (blueVerified !== undefined) {
+//   filter['employeeId.blueVerified.status'] = blueVerified === 'true';
+// }
 
-if (adminVerified !== undefined) {
-  filter['employeeId.adminVerified.status'] = adminVerified === 'true';
-}
+// if (adminVerified !== undefined) {
+//   filter['employeeId.adminVerified.status'] = adminVerified === 'true';
+// }
+
+
+
     // Filter by price range
     if (minPrice || maxPrice) {
       filter['workPrice.currency'] = currency;
@@ -235,6 +238,8 @@ export const searchPortfoliosBySkillsAndTags = async (req, res) => {
       tags,
       category,
       badgeType,
+       blueVerified,
+       adminVerified,
       minPrice,
       maxPrice,
       currency = 'INR',
@@ -343,7 +348,7 @@ const filteredPortfolios = portfolios.filter(p => {
     const searchSkills = skills ? skills.split(',').map(s => s.trim().toLowerCase()) : [];
     const searchTags = tags ? tags.split(',').map(t => t.trim().toLowerCase()) : [];
 
-    const portfoliosWithScore = portfolios.map(portfolio => {
+    const portfoliosWithScore = filteredPortfolios.map(portfolio => {
       let matchScore = 0;
       let matchedSkills = [];
       let matchedTags = [];
@@ -593,7 +598,7 @@ badge: portfolio.employeeId.hasBadge ? {
   show:   true,
   type:   portfolio.employeeId.badgeType,
   label:  portfolio.employeeId.badgeLabel,
-  icon:   portfolio.employeeId.badgeType === 'blue-verified' ? 'verified'     :
+ icon: portfolio.employeeId.badgeType === 'blue-verified' ? 'check-decagram' :
           portfolio.employeeId.badgeType === 'admin-verified' ? 'shield-check' : 'badge',
   color:  portfolio.employeeId.badgeType === 'blue-verified' ? '#0066FF'       :
           portfolio.employeeId.badgeType === 'admin-verified' ? '#00B37E'       : '#888',
