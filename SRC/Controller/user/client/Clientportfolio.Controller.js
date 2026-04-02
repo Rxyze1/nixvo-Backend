@@ -113,7 +113,7 @@ const filteredPortfolios = portfolios.filter(p => {
       success: true,
       message: '✅ Portfolios fetched successfully',
       data: {
-        portfolios: portfolios.map(portfolio => ({
+       portfolios: filteredPortfolios.map(portfolio => ({
           // Portfolio Details
           id: portfolio._id,
           portfolioName: portfolio.portfolioName,
