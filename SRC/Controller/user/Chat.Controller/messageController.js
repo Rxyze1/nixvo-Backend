@@ -5,7 +5,9 @@ import Conversation from '../../../Models/Chat/ConversationModel.js';
 import User         from '../../../Models/USER-Auth/User-Auth.-Model.js';
 import chatValidationService from '../../../Service/Chat/chatValidationService.js';
 import chatSecurityService   from '../../../Service/Chat/chatSecurityService.js';
-
+  // const  sendPushNotificationsToUser  = await import('../../../Service/Notification/pushNotificationService.js');
+  import { sendPushNotificationsToUser } from '../../../Service/Notification/pushNotificationService.js';
+    
  import Client   from '../../../Models/USER-Auth/Client-Model.js';
  import Employee from '../../../Models/USER-Auth/Employee-Model.js';
 
@@ -581,9 +583,36 @@ export const sendMessage = asyncHandler(async (req, res) => {
     });
   }
 
+  // ── Push Notification ────────────────────────────────────
+// Yeh block paste karo line ~310, after socket emitSocketEvent calls
+if (conversation.type === 'direct' && recipient) {
+  try {
+    const notifBody = messageType === 'text'
+      ? (text?.substring(0, 100) || '')
+      : messageType === 'image' ? '📷 Sent a photo'
+      : messageType === 'video' ? '🎥 Sent a video'
+      : '📎 Sent a file';
+
+    sendPushNotificationsToUser({
+      userId: recipient._id,
+      type:   'message',
+      title:  currentUser.fullname || 'New Message',
+      body:   notifBody,
+      data: {
+        conversationId: conversation._id.toString(),
+        participantId:  currentUserId.toString(),
+      }
+    }).catch(err => console.error('[Push] failed:', err.message));
+  } catch (err) {
+    console.error('[Push] error:', err.message);
+  }
+}
+
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`✅ MESSAGE SENT: ${messageType.toUpperCase()}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+
 
   return createdResponse(res, {
     message: message.toObject(),
