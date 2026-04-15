@@ -3,7 +3,8 @@
 import Job          from '../../../Models/USER-Auth/Client/Job.js';
 import Application  from '../../../Models/USER-Auth/Employee/ApplicationModel.js';
 import Employee     from '../../../Models/USER-Auth/Employee-Model.js';
-
+// Add this with your other imports at the top
+import { notifyNewApplication } from '../../../Service/Notification/NotificationService.js';
 import ImageValidator    from '../../../Service/Security/ImageValidator.js';
 import DocumentValidator from '../../../Service/Security/DocumentValidator.js';
 import validationService from '../../../Service/validationService.js';
@@ -664,6 +665,19 @@ export const applyToJob = async (req, res) => {
       }).catch(err => {
         console.error(`   ⚠️  Client notification failed (non-fatal): ${err.message}`);
       });
+
+            // ⭐⭐⭐ ADD THIS: Push Notification ⭐⭐⭐
+      notifyNewApplication(job, req.user, employee)
+        .then(() => {
+          console.log(`   🔔 Push notification sent to client`);
+        })
+        .catch(err => {
+          console.error(`   ⚠️  Client push failed (non-fatal): ${err.message}`);
+        });
+
+
+
+
     } else {
       console.warn('   ⚠️  Client has no email address — notification skipped');
     }

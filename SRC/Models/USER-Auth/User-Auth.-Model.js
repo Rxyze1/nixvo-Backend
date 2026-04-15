@@ -90,7 +90,14 @@ const UserSchema = new mongoose.Schema(
       },
       required: [true, 'User type is required'],
     },
+    
+    // Inside UserSchema, add this new field:
 
+    
+ // ── Push Notifications ──
+    expoPushToken:     { type: String, default: null },
+    pushTokenUpdatedAt: { type: Date, default: null },
+    pushTokenPlatform:  { type: String, enum: ['expo', 'web'], default: null },
 
     // ── Role — permission hierarchy only ──
     // admin/moderator controllers check this

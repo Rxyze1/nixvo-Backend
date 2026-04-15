@@ -2,12 +2,14 @@
 
 import Message      from '../../../Models/Chat/MessageModel.js';
 import Conversation from '../../../Models/Chat/ConversationModel.js';
+import mongoose from 'mongoose';
 import User         from '../../../Models/USER-Auth/User-Auth.-Model.js';
 import chatValidationService from '../../../Service/Chat/chatValidationService.js';
 import chatSecurityService   from '../../../Service/Chat/chatSecurityService.js';
-  // const  sendPushNotificationsToUser  = await import('../../../Service/Notification/pushNotificationService.js');
-  import { sendPushNotificationsToUser } from '../../../Service/Notification/pushNotificationService.js';
-    
+
+import Notification from '../../../Models/Notification-Model/Notification.js';
+
+
  import Client   from '../../../Models/USER-Auth/Client-Model.js';
  import Employee from '../../../Models/USER-Auth/Employee-Model.js';
 
@@ -115,7 +117,80 @@ export const upload = multer({
 
 // ═════════════════════════════════════════════════════════════
 // HELPER FUNCTIONS
-// ═════════════════════════════════════════════════════════════
+// ═══════════
+// ══════════════════════════════════════════════════
+
+
+// Create this helper ONCE at the top of the file
+/**
+ * Enrich messages with sender profile pictures and badges
+ * @param {Array} messages - Array of message objects with populated senderId
+ * @returns {Array} Enriched messages with badges
+ */
+// ══════════════════════════════════════════════════════════════
+// SHARED HELPER: Enrich senders with profile pics & badges
+// ══════════════════════════════════════════════════════════════
+
+const enrichSendersWithBadges = async (messages) => {
+  const senderIds = [...new Set(
+    messages.map(m => (m.senderId?._id ?? m.senderId)?.toString()).filter(Boolean)
+  )];
+
+  if (senderIds.length === 0) return messages;
+
+  const [clients, employees] = await Promise.all([
+    Client.find({ userId: { $in: senderIds } }).select('userId profilePic isPremium').lean(),
+    Employee.find({ userId: { $in: senderIds } }).select('userId profilePic hasBadge badgeType badgeLabel blueVerified adminVerified').lean(),
+  ]);
+
+  const picMap = {};
+  const badgeMap = {};
+
+  clients.forEach(doc => {
+    const id = doc.userId.toString();
+    if (doc.profilePic) picMap[id] = doc.profilePic;
+    const isPremium = doc.isPremium ?? false;
+    badgeMap[id] = {
+      isPremium,
+      blueVerified: isPremium ? { status: true, icon: 'verified', color: '#0066FF', bg: '#EBF5FF', label: 'Premium Member' } : { status: false },
+      tier: isPremium ? 'premium' : 'free',
+    };
+  });
+
+  employees.forEach(doc => {
+    const id = doc.userId.toString();
+    if (doc.profilePic) picMap[id] = doc.profilePic;
+    const isPremium = doc.blueVerified?.status === true;
+    const isAdminVerified = doc.adminVerified?.status === true;
+    badgeMap[id] = {
+      badge: doc.hasBadge ? {
+        show: true, type: doc.badgeType, label: doc.badgeLabel,
+        icon: doc.badgeType === 'blue-verified' ? 'verified' : doc.badgeType === 'admin-verified' ? 'shield-check' : 'badge',
+        color: doc.badgeType === 'blue-verified' ? '#0066FF' : doc.badgeType === 'admin-verified' ? '#00B37E' : '#888',
+        bg: doc.badgeType === 'blue-verified' ? '#EBF5FF' : doc.badgeType === 'admin-verified' ? '#E6FAF5' : '#f0f0f0',
+      } : { show: false },
+      blueVerified: isPremium ? { status: true, icon: 'verified', color: '#0066FF', bg: '#EBF5FF', label: 'Premium Member' } : { status: false },
+      adminVerified: { status: isAdminVerified },
+      tier: isPremium ? 'premium' : isAdminVerified ? 'verified' : 'free',
+    };
+  });
+
+  return messages.map(msg => {
+    const sid = (msg.senderId?._id ?? msg.senderId)?.toString();
+    return {
+      ...msg,
+      senderId: msg.senderId ? {
+        ...msg.senderId,
+        profilePic: picMap[sid] ?? msg.senderId.profilePic ?? null,
+        ...(badgeMap[sid] ?? {}),
+      } : msg.senderId,
+    };
+  });
+};
+// Then use it in all 3 functions:
+// const enrichedMessages = await enrichSendersWithBadges(messages);
+
+
 
 /**
  * Clean up temporary files — idempotent (checks existsSync before unlinking).
@@ -235,9 +310,14 @@ const asyncHandler = (fn) => (req, res, next) => {
 // ═════════════════════════════════════════════════════════════
 
 export const sendMessage = asyncHandler(async (req, res) => {
+
   const currentUserId = req.user._id;
   const currentUser   = req.user;
   const { conversationId, text, replyToId } = req.body;
+
+   if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    return badRequestResponse(res, '❌ Invalid conversation ID');
+  }
 
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📤 [SEND MESSAGE - SMART MODE]');
@@ -308,11 +388,15 @@ export const sendMessage = asyncHandler(async (req, res) => {
       if (text.length > MAX_TEXT_LENGTH)
         return badRequestResponse(res, `❌ Message too long (max ${MAX_TEXT_LENGTH} characters)`);
 
-      const linkCheck  = containsAllowedExternalLinks(text);
-      const validation = await chatSecurityService.validateTextMessage(text);
+       // Run Link Check and Regex Validation in parallel (Saves milliseconds)
+      const [linkCheck, validation] = await Promise.all([
+        Promise.resolve(containsAllowedExternalLinks(text)),
+        chatSecurityService.validateTextMessage(text, currentUserId.toString()) // ✅ ADDED userId
+      ]);
 
       if (validation.blocked && !linkCheck.allowed) return badRequestResponse(res, validation.reason);
       if (validation.warning) warnings.push(validation.warning);
+
 
       messageData.content = { text: text.trim() };
 
@@ -516,13 +600,20 @@ export const sendMessage = asyncHandler(async (req, res) => {
   }
 
   // ── Save to DB ───────────────────────────────────────────
+  // ── Save to DB & Fetch Profile Pic IN PARALLEL ──────────
   messageData.status      = 'sent';
   messageData.deliveredTo = [];
   messageData.readBy      = [];
 
-  const message = await Message.create(messageData);
-  await message.populate('senderId', 'fullname username userType email profilePic');
+  // ✅ OPTIMIZATION: Run DB Save and Profile Pic Fetch at the EXACT SAME TIME
+  const [message, senderProfileDoc] = await Promise.all([
+    Message.create(messageData).then(msg => msg.populate('senderId', 'fullname username userType email profilePic')),
+    currentUser.userType === 'client' 
+      ? Client.findOne({ userId: currentUserId.toString() }).select('profilePic').lean()
+      : Employee.findOne({ userId: currentUserId.toString() }).select('profilePic').lean()
+  ]);
 
+  const senderProfilePic = senderProfileDoc?.profilePic || currentUser.profilePic || null;
   console.log(`✅ Message saved: ${message._id}`);
 
   // ── Update conversation ──────────────────────────────────
@@ -566,51 +657,82 @@ export const sendMessage = asyncHandler(async (req, res) => {
     ...(warnings.length > 0 && { warnings })
   };
 
-  if (conversation.type === 'direct' && recipient) {
+    if (conversation.type === 'direct' && recipient) {
+    // ONLY send to the receiver. The sender's UI updates instantly, no notification needed.
     emitSocketEvent('receive_message', recipient._id, {
       ...messagePayload,
       unreadCount: 1
     });
-    emitSocketEvent('message_sent', currentUserId, {
-      message: message.toObject(),
-      conversationId: conversation._id
-    });
   } else if (conversation.type === 'group') {
+    // ONLY send to the group (excluding the sender). 
     broadcastToConversation('receive_message', conversation._id, messagePayload, currentUserId);
-    emitSocketEvent('message_sent', currentUserId, {
-      message: message.toObject(),
-      conversationId: conversation._id
-    });
   }
 
-  // ── Push Notification ────────────────────────────────────
-// Yeh block paste karo line ~310, after socket emitSocketEvent calls
-if (conversation.type === 'direct' && recipient) {
-  try {
-    const notifBody = messageType === 'text'
-      ? (text?.substring(0, 100) || '')
-      : messageType === 'image' ? '📷 Sent a photo'
-      : messageType === 'video' ? '🎥 Sent a video'
-      : '📎 Sent a file';
 
-    sendPushNotificationsToUser({
-      userId: recipient._id,
-      type:   'message',
-      title:  currentUser.fullname || 'New Message',
-      body:   notifBody,
-      data: {
-        conversationId: conversation._id.toString(),
-        participantId:  currentUserId.toString(),
+  // ═══════════════════════════════════════════════════════════════
+  // ✅ ENHANCED: Now includes Profile Picture + Deep Link Data!
+  // ═════════════════════════════════════════════════════════════
+
+    // ═══════════════════════════════════════════════════════════════
+  // 🚀 PUSH NOTIFICATION (Auto-triggered via Notification Model Hook)
+  // ═══════════════════════════════════════════════════════════════
+  if (conversation.type === 'direct' && recipient) {
+    try {
+      // 1. Determine Message Preview Text
+      let messagePreview = '';
+      if (messageType === 'text') {
+        messagePreview = text?.trim().substring(0, 100) || 'Sent a message';
+      } else if (messageType === 'image') {
+        messagePreview = detectedFiles.images.length > 1 
+          ? `📷 ${detectedFiles.images.length} Photos` 
+          : '📷 Sent a photo';
+      } else if (messageType === 'video') {
+        messagePreview = '🎥 Sent a video';
+      } else if (messageType === 'file') {
+        messagePreview = '📎 Sent a file';
       }
-    }).catch(err => console.error('[Push] failed:', err.message));
-  } catch (err) {
-    console.error('[Push] error:', err.message);
-  }
-}
 
-  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`✅ MESSAGE SENT: ${messageType.toUpperCase()}`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      // // 2. Get Sender's Profile Picture
+      //     // 2. Get Sender's Profile Picture
+      // let senderProfilePic = currentUser.profilePic || null;
+      // try {
+      //   if (currentUser.userType === 'client') {
+      //     const clientDoc = await Client.findOne({ userId: currentUserId.toString() }).select('profilePic').lean();
+      //     senderProfilePic = clientDoc?.profilePic || senderProfilePic;
+      //   } else if (currentUser.userType === 'employee') {
+      //     const empDoc = await Employee.findOne({ userId: currentUserId.toString() }).select('profilePic').lean();
+      //     senderProfilePic = empDoc?.profilePic || senderProfilePic;
+      //   }
+      // } catch (picError) {
+      //   console.warn('⚠️ Could not fetch sender profile pic:', picError.message);
+      // }
+
+      // 3. Save to Notification DB -> Model Hook handles the actual push!
+         // 3. Save to Notification DB -> Model Hook handles the actual push!
+          await Notification.create({
+        userId: recipient._id,
+        type: 'message',
+        title: `💬 ${currentUser.fullname}`,
+        message: messagePreview,
+        data: {
+          senderId: currentUserId.toString(), // ✅ MUST BE EXACTLY "senderId"
+          senderType: currentUser.userType,
+          senderProfilePic: senderProfilePic,
+          conversationId: conversation._id.toString(),
+          screen: 'MessageScreen',
+        }
+      });
+
+      console.log(`🔔 [Push Triggered] -> ${recipient.fullname} (${recipient.userType})`);
+
+    } catch (pushError) {
+      // Don't let notification failure break message sending
+      console.error('⚠️ [Notification Save Error]:', pushError.message); 
+    }
+  }
+  
+console.log('🔥🔥🔥🔥 MESSAGE CONTROLLER LOADED 🔥🔥🔥🔥');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  PUSH Notificatin SETUP  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
 
 
@@ -627,8 +749,14 @@ if (conversation.type === 'direct' && recipient) {
 // ═════════════════════════════════════════════════════════════
 
 export const getMessages = asyncHandler(async (req, res) => {
-  const currentUserId      = req.user._id;
-  const { conversationId } = req.params;
+ 
+ const currentUserId      = req.user._id;
+  const { conversationId } = req.params;  // ← Destructure FIRST
+  
+  // ✅ Then validate
+  if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    return badRequestResponse(res, '❌ Invalid conversation ID');
+  }
   const { page = 1, limit = 50, before } = req.query;
 
   console.log('\n📥 [GET MESSAGES]');
@@ -670,59 +798,17 @@ export const getMessages = asyncHandler(async (req, res) => {
     .limit(limitInt)
     .lean();
 
-  console.log(`✅ Retrieved ${messages.length} messages`);
-  messages.reverse();
-
+  
 
 
 // TO ✅
-const enrichSenderIds = [...new Set(messages.map(m => (m.senderId?._id ?? m.senderId)?.toString()).filter(Boolean))];
+  console.log(`✅ Retrieved ${messages.length} messages`);
+  messages.reverse();
 
-const [sClients, sEmployees] = await Promise.all([
-  Client.find({ userId: { $in: enrichSenderIds } }).select('userId profilePic isPremium').lean(),
-  Employee.find({ userId: { $in: enrichSenderIds } }).select('userId profilePic hasBadge badgeType badgeLabel blueVerified adminVerified').lean(),
-]);
-const sPicMap = {}, sBadgeMap = {};
+  // ✅ Enrich with shared helper
+  const enrichedMessages = await enrichSendersWithBadges(messages);
 
-sClients.forEach(doc => {
-  const id = doc.userId.toString();
-  if (doc.profilePic) sPicMap[id] = doc.profilePic;
-  sBadgeMap[id] = {
-    isPremium:    doc.isPremium ?? false,
-    blueVerified: doc.isPremium ? { status: true, icon: 'verified', color: '#0066FF', bg: '#EBF5FF', label: 'Premium Member' } : { status: false },
-    tier: doc.isPremium ? 'premium' : 'free',
-  };
-});
-
-sEmployees.forEach(doc => {
-  const id = doc.userId.toString();
-  if (doc.profilePic) sPicMap[id] = doc.profilePic;
-  const isPremium = doc.blueVerified?.status === true;
-  sBadgeMap[id] = {
-    badge: doc.hasBadge ? {
-      show: true, type: doc.badgeType, label: doc.badgeLabel,
-      icon:  doc.badgeType === 'blue-verified' ? 'verified'     : doc.badgeType === 'admin-verified' ? 'shield-check' : 'badge',
-      color: doc.badgeType === 'blue-verified' ? '#0066FF'       : doc.badgeType === 'admin-verified' ? '#00B37E'      : '#888',
-      bg:    doc.badgeType === 'blue-verified' ? '#EBF5FF'       : doc.badgeType === 'admin-verified' ? '#E6FAF5'      : '#f0f0f0',
-    } : { show: false },
-    blueVerified:  isPremium ? { status: true, icon: 'verified', color: '#0066FF', bg: '#EBF5FF', label: 'Premium Member' } : { status: false },
-    adminVerified: { status: doc.adminVerified?.status ?? false },
-    tier: isPremium ? 'premium' : doc.adminVerified?.status ? 'verified' : 'free',
-  };
-});
-
-const enrichedMessages = messages.map(msg => {
-  const sid = (msg.senderId?._id ?? msg.senderId)?.toString();
-  return {
-    ...msg,
-    senderId: msg.senderId ? {
-      ...msg.senderId,
-      profilePic: sPicMap[sid] ?? msg.senderId.profilePic ?? null,
-      ...(sBadgeMap[sid] ?? {}),
-    } : msg.senderId,
-  };
-});
-
+  // ── Mark unread messages as read ─────────────────────────
 
 
   // ── Mark unread messages as read ─────────────────────────
@@ -833,6 +919,10 @@ export const deleteMessage = asyncHandler(async (req, res) => {
   const currentUserId = req.user._id;
   const { messageId }  = req.params;
 
+   if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    return badRequestResponse(res, '❌ Invalid message ID');
+  }
+
   const message = await Message.findById(messageId)
     .populate('senderId', 'fullname username');
 
@@ -868,6 +958,9 @@ export const editMessage = asyncHandler(async (req, res) => {
   const currentUserId = req.user._id;
   const { messageId }  = req.params;
   const { text }       = req.body;
+   if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    return badRequestResponse(res, '❌ Invalid message ID');
+  }
 
   if (!text?.trim())
     return badRequestResponse(res, '❌ Message text is required');
@@ -917,6 +1010,10 @@ export const addReaction = asyncHandler(async (req, res) => {
   const currentUserId = req.user._id;
   const { messageId }  = req.params;
   const { emoji }      = req.body;
+  // ✅ ADD THIS:
+  if (!mongoose.Types.ObjectId.isValid(messageId)) {
+    return badRequestResponse(res, '❌ Invalid message ID');
+  }
 
   if (!emoji || typeof emoji !== 'string' || emoji.length > 10)
     return badRequestResponse(res, '❌ Invalid emoji');
@@ -925,9 +1022,8 @@ export const addReaction = asyncHandler(async (req, res) => {
   if (!message)          return notFoundResponse(res, '❌ Message not found');
   if (message.isDeleted) return badRequestResponse(res, '❌ Cannot react to deleted message');
 
-  const { valid } = await validateConversationAccess(message.conversationId, currentUserId);
-  if (!valid) return forbiddenResponse(res, '❌ You are not a participant in this conversation');
-
+const { valid, error } = await validateConversationAccess(message.conversationId, currentUserId);
+if (!valid) return forbiddenResponse(res, `❌ ${error}`);
   if (typeof message.addReaction === 'function') {
     await message.addReaction(currentUserId, emoji);
   } else {
@@ -960,7 +1056,12 @@ export const addReaction = asyncHandler(async (req, res) => {
 export const getMedia = asyncHandler(async (req, res) => {
   const currentUserId      = req.user._id;
   const { conversationId } = req.params;
+  
   const { type = 'all', page = 1, limit = 20 } = req.query;
+
+   if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    return badRequestResponse(res, '❌ Invalid conversation ID');
+  }
 
   const { valid, error } = await validateConversationAccess(conversationId, currentUserId);
   if (!valid) return forbiddenResponse(res, `❌ ${error}`);
@@ -991,53 +1092,7 @@ export const getMedia = asyncHandler(async (req, res) => {
   ]);
 
   // ── Enrich sender profilePic + badge ─────────────────────
-  const mediaSenderIds = [...new Set(media.map(m => (m.senderId?._id ?? m.senderId)?.toString()).filter(Boolean))];
-
-  const [mClients, mEmployees] = await Promise.all([
-    Client.find({ userId: { $in: mediaSenderIds } }).select('userId profilePic isPremium').lean(),
-    Employee.find({ userId: { $in: mediaSenderIds } }).select('userId profilePic hasBadge badgeType badgeLabel blueVerified adminVerified').lean(),
-  ]);
-
-  const mPicMap = {}, mBadgeMap = {};
-
-  mClients.forEach(doc => {
-    const id = doc.userId.toString();
-    if (doc.profilePic) mPicMap[id] = doc.profilePic;
-    mBadgeMap[id] = {
-      isPremium:    doc.isPremium ?? false,
-      blueVerified: doc.isPremium ? { status: true, icon: 'verified', color: '#0066FF', bg: '#EBF5FF', label: 'Premium Member' } : { status: false },
-      tier: doc.isPremium ? 'premium' : 'free',
-    };
-  });
-
-  mEmployees.forEach(doc => {
-    const id = doc.userId.toString();
-    if (doc.profilePic) mPicMap[id] = doc.profilePic;
-    const isPremium = doc.blueVerified?.status === true;
-    mBadgeMap[id] = {
-      badge: doc.hasBadge ? {
-        show: true, type: doc.badgeType, label: doc.badgeLabel,
-        icon:  doc.badgeType === 'blue-verified' ? 'verified'     : doc.badgeType === 'admin-verified' ? 'shield-check' : 'badge',
-        color: doc.badgeType === 'blue-verified' ? '#0066FF'       : doc.badgeType === 'admin-verified' ? '#00B37E'      : '#888',
-        bg:    doc.badgeType === 'blue-verified' ? '#EBF5FF'       : doc.badgeType === 'admin-verified' ? '#E6FAF5'      : '#f0f0f0',
-      } : { show: false },
-      blueVerified:  isPremium ? { status: true, icon: 'verified', color: '#0066FF', bg: '#EBF5FF', label: 'Premium Member' } : { status: false },
-      adminVerified: { status: doc.adminVerified?.status ?? false },
-      tier: isPremium ? 'premium' : doc.adminVerified?.status ? 'verified' : 'free',
-    };
-  });
-
-  const enrichedMedia = media.map(msg => {
-    const sid = (msg.senderId?._id ?? msg.senderId)?.toString();
-    return {
-      ...msg,
-      senderId: msg.senderId ? {
-        ...msg.senderId,
-        profilePic: mPicMap[sid] ?? msg.senderId.profilePic ?? null,
-        ...(mBadgeMap[sid] ?? {}),
-      } : msg.senderId,
-    };
-  });
+const enrichedMedia = await enrichSendersWithBadges(media);
 
   return successResponse(res, {
     media: enrichedMedia,
@@ -1060,21 +1115,32 @@ export const searchMessages = asyncHandler(async (req, res) => {
   const { conversationId } = req.params;
   const { query, page = 1, limit = 20 } = req.query;
 
-  if (!query || query.trim().length < 2)
-    return badRequestResponse(res, '❌ Search query must be at least 2 characters');
+  // ── Validate conversation ID ──────────────────────────────
+  if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    return badRequestResponse(res, '❌ Invalid conversation ID');
+  }
 
+  // ── Validate search query ─────────────────────────────────
+  if (!query || query.trim().length < 2) {
+    return badRequestResponse(res, '❌ Search query must be at least 2 characters');
+  }
+
+  // ── Validate access ───────────────────────────────────────
   const { valid, error } = await validateConversationAccess(conversationId, currentUserId);
   if (!valid) return forbiddenResponse(res, `❌ ${error}`);
 
+  // ── Pagination setup ──────────────────────────────────────
   const limitInt = Math.min(parseInt(limit), 100);
   const skip     = (parseInt(page) - 1) * limitInt;
 
+  // ── Build search query ────────────────────────────────────
   const searchQuery = {
     conversationId,
     isDeleted:      false,
     'content.text': { $regex: query.trim(), $options: 'i' }
   };
 
+  // ── Execute search ───────────────────────────────────────
   const [messages, total] = await Promise.all([
     Message.find(searchQuery)
       .populate('senderId', 'fullname username userType profilePic')
@@ -1085,58 +1151,17 @@ export const searchMessages = asyncHandler(async (req, res) => {
     Message.countDocuments(searchQuery)
   ]);
 
-  // ── Enrich sender profilePic + badge ─────────────────────
-  const searchMsgSenderIds = [...new Set(messages.map(m => (m.senderId?._id ?? m.senderId)?.toString()).filter(Boolean))];
+  console.log(`🔍 [SEARCH] Found ${total} messages matching "${query.trim()}"`);
 
-  const [smClients, smEmployees] = await Promise.all([
-    Client.find({ userId: { $in: searchMsgSenderIds } }).select('userId profilePic isPremium').lean(),
-    Employee.find({ userId: { $in: searchMsgSenderIds } }).select('userId profilePic hasBadge badgeType badgeLabel blueVerified adminVerified').lean(),
-  ]);
+  // ════════════════════════════════════════════════════════
+  // ✅ FIXED: Use shared helper + correct variable name!
+  // ════════════════════════════════════════════════════════
+  const enrichedSearchMessages = await enrichSendersWithBadges(messages);
 
-  const smPicMap = {}, smBadgeMap = {};
-
-  smClients.forEach(doc => {
-    const id = doc.userId.toString();
-    if (doc.profilePic) smPicMap[id] = doc.profilePic;
-    smBadgeMap[id] = {
-      isPremium:    doc.isPremium ?? false,
-      blueVerified: doc.isPremium ? { status: true, icon: 'verified', color: '#0066FF', bg: '#EBF5FF', label: 'Premium Member' } : { status: false },
-      tier: doc.isPremium ? 'premium' : 'free',
-    };
-  });
-
-  smEmployees.forEach(doc => {
-    const id = doc.userId.toString();
-    if (doc.profilePic) smPicMap[id] = doc.profilePic;
-    const isPremium = doc.blueVerified?.status === true;
-    smBadgeMap[id] = {
-      badge: doc.hasBadge ? {
-        show: true, type: doc.badgeType, label: doc.badgeLabel,
-        icon:  doc.badgeType === 'blue-verified' ? 'verified'     : doc.badgeType === 'admin-verified' ? 'shield-check' : 'badge',
-        color: doc.badgeType === 'blue-verified' ? '#0066FF'       : doc.badgeType === 'admin-verified' ? '#00B37E'      : '#888',
-        bg:    doc.badgeType === 'blue-verified' ? '#EBF5FF'       : doc.badgeType === 'admin-verified' ? '#E6FAF5'      : '#f0f0f0',
-      } : { show: false },
-      blueVerified:  isPremium ? { status: true, icon: 'verified', color: '#0066FF', bg: '#EBF5FF', label: 'Premium Member' } : { status: false },
-      adminVerified: { status: doc.adminVerified?.status ?? false },
-      tier: isPremium ? 'premium' : doc.adminVerified?.status ? 'verified' : 'free',
-    };
-  });
-
-  const enrichedSearchMessages = messages.map(msg => {
-    const sid = (msg.senderId?._id ?? msg.senderId)?.toString();
-    return {
-      ...msg,
-      senderId: msg.senderId ? {
-        ...msg.senderId,
-        profilePic: smPicMap[sid] ?? msg.senderId.profilePic ?? null,
-        ...(smBadgeMap[sid] ?? {}),
-      } : msg.senderId,
-    };
-  });
-
+  // ── Return response ───────────────────────────────────────
   return successResponse(res, {
-    messages: enrichedSearchMessages,
-    query: query.trim(),
+    messages: enrichedSearchMessages,  // ✅ CORRECT: matches variable name above
+    query:     query.trim(),
     pagination: {
       page:  parseInt(page),
       limit: limitInt,

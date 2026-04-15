@@ -1,6 +1,5 @@
 // Service/Security/DocumentValidator.js
 
-import AIValidationService from '../moderation/aiValidationService.js';
 import crypto from 'crypto';
 import { createRequire } from 'module';
 import sharp from 'sharp';
@@ -9,7 +8,7 @@ import path from 'path';
 import os from 'os';
 import { uploadToR2 } from '../../Config/r2Config.js';
 import TesseractManager from './TesseractManager.js';
-import { fromBuffer } from 'pdf2pic';  // ✅ Replaced pdf-poppler (Linux compatible)
+import { fromBuffer } from 'pdf2pic';
 
 const require = createRequire(import.meta.url);
 
@@ -17,6 +16,7 @@ const require = createRequire(import.meta.url);
 let pdfParse = null;
 try {
   process.env.PDF_PARSE_NO_NATIVE = '1';
+  delete require.cache['pdf-parse'];
   const mod = require('pdf-parse');
   pdfParse  = typeof mod === 'function' ? mod : (mod?.default ?? null);
   if (pdfParse) console.log('✅ pdf-parse loaded');
@@ -28,7 +28,6 @@ try {
 class DocumentValidator {
 
   constructor() {
-    this.ai           = AIValidationService;
     this.cleanupTimer = null;
 
     this.config = {
@@ -60,14 +59,14 @@ class DocumentValidator {
 
     this._startPeriodicCleanup();
 
-    console.log('🧠 DocumentValidator ready');
+    console.log('🧠 DocumentValidator ready (Regex Only - No AI)');
     console.log(`   Upload OCR to R2     : ${this.config.uploadOCRToR2     ? 'YES' : 'NO'}`);
     console.log(`   Upload Processed PDF : ${this.config.uploadProcessedPDF ? 'YES' : 'NO'}\n`);
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════════════
   // R2 UPLOAD HELPER
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════════════════════════
 
   async _uploadFileToR2(filePath, destination, mimetype = 'image/png') {
     try {
@@ -81,9 +80,9 @@ class DocumentValidator {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // OCR — delegates entirely to TesseractManager singleton
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════════════════════════════════
+  // OCR — delegates to TesseractManager
+  // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
 
   async _runOCR(imageBuffer) {
     try {
@@ -100,7 +99,7 @@ class DocumentValidator {
         return '';
       }
 
-      const dataUrl            = `data:image/png;base64,${processed.toString('base64')}`;
+      const dataUrl = `data:image/png;base64,${processed.toString('base64')}`;
       const { data: { text } } = await worker.recognize(dataUrl);
       return text || '';
 
@@ -110,9 +109,9 @@ class DocumentValidator {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
   // MAIN VALIDATE
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════════════════════════════════════
 
   async validate(buffer, options = {}) {
     const startTime      = Date.now();
@@ -122,8 +121,8 @@ class DocumentValidator {
     let   tempDirCreated = false;
 
     console.log('\n🧠 ══════════════════════════════════════════════════');
-    console.log('🧠  DOCUMENT VALIDATOR');
-    console.log('🧠 ══════════════════════════════════════════════════\n');
+    console.log('🧠  DOCUMENT VALIDATOR (Regex Only - No AI)');
+    console.log('🧠 ══════════════════════════════════════════════════════════\n');
     console.log(`   File : ${options.filename || 'unknown'}`);
     console.log(`   Type : ${options.mimetype  || 'unknown'}`);
     console.log(`   Size : ${(buffer.length / 1024).toFixed(2)} KB\n`);
@@ -190,7 +189,6 @@ class DocumentValidator {
             if (url) uploadedFiles.push({ type: 'original-pdf', url });
           }
 
-          // ✅ pdf2pic — works on Windows, Mac, AND Linux
           const convert = fromBuffer(buffer, {
             density:      150,
             saveFilename: 'page',
@@ -199,7 +197,7 @@ class DocumentValidator {
             width:        2048,
             height:       2048,
           });
-          await convert.bulk(-1, { responseType: 'image' }); // convert ALL pages
+          await convert.bulk(-1, { responseType: 'image' });
 
           const pageFiles = (await fs.readdir(tempDir))
             .filter(f => f.startsWith('page') && f.endsWith('.png'))
@@ -285,8 +283,8 @@ class DocumentValidator {
         }
       }
 
-      // ── STEP 3: Quick regex pre-scan ───────────────────────────────
-      console.log('🔍 STEP 3: Pattern pre-scan (building AI context)...\n');
+      // ── Regex scan ──────────────────────────────────────────────────
+      console.log('🔍 Scanning for contact information...\n');
       const quickScan = this._quickContactScan(allExtractedText);
 
       console.log(`   Emails       : ${quickScan.emails.length}`);
@@ -302,37 +300,61 @@ class DocumentValidator {
       if (quickScan.instructions.length) console.log(`   💬 ${quickScan.instructions.slice(0, 2).join(' | ')}`);
       console.log();
 
-      // ── STEP 4: AI validation ──────────────────────────────────────
-      console.log('🤖 STEP 4: AI content validation...\n');
-      const aiResult = await this._smartAIValidation({ text: allExtractedText, hints: quickScan });
+      // ── Decision (Regex only, no AI) ─────────────────────────────────
+      const violations = [];
+      let blocked = false;
+      let reason = 'Resume is clean. No contact information found.';
 
-      console.log(`   Decision   : ${aiResult.decision}`);
-      console.log(`   Confidence : ${aiResult.confidence}%`);
-      console.log(`   Reasoning  : "${aiResult.reasoning}"`);
-      if (aiResult.violations?.length) {
-        console.log(`   Violations : ${aiResult.violations.join(', ')}`);
+      if (quickScan.emails.length > 0) {
+        blocked = true;
+        violations.push('email_address');
+        reason = 'Email addresses are not allowed in resumes.';
       }
+      if (quickScan.phones.length > 0) {
+        blocked = true;
+        violations.push('phone_number');
+        reason = 'Phone numbers are not allowed in resumes.';
+      }
+      if (quickScan.urls.length > 0) {
+        blocked = true;
+        violations.push('personal_url');
+        reason = 'External links and URLs are not allowed in resumes.';
+      }
+      if (quickScan.instructions.length > 0) {
+        blocked = true;
+        violations.push('contact_instruction');
+        reason = 'Phrases like "contact me" or "reach out" are not allowed.';
+      }
+      if (quickScan.handles.length > 2) {
+        blocked = true;
+        violations.push('social_handle_contact');
+        reason = 'Multiple social media handles are not allowed.';
+      }
+
+      const finalDecision = blocked ? 'BLOCK' : 'ALLOW';
+      const confidence = blocked ? 95 : 0;
+
+      console.log(`   Decision   : ${finalDecision}`);
+      console.log(`   Reasoning  : "${reason}"`);
+      if (violations.length) console.log(`   Violations : ${violations.join(', ')}`);
       console.log();
 
-      const blocked = aiResult.decision === 'BLOCK';
-
       const result = {
-        action:     aiResult.decision,
+        action: finalDecision,
         blocked,
-        confidence: aiResult.confidence,
-        violations: aiResult.violations || [],
-        reason:     aiResult.reasoning,
+        confidence,
+        violations,
+        reason,
         quickScan,
-        aiResult,
         uploadedFiles,
         scanDetails: {
-          pdfTextLength:   pdfText.length,
-          pagesScanned:    imageTexts.length,
+          pdfTextLength: pdfText.length,
+          pagesScanned: imageTexts.length,
           totalTextLength: allExtractedText.length,
           r2FilesUploaded: uploadedFiles.length,
         },
-        scanTime:  Date.now() - startTime,
-        checkedBy: ['pdf-extractor', 'ocr-scanner', 'pattern-scan', 'ai-validation'],
+        scanTime: Date.now() - startTime,
+        checkedBy: ['pdf-extractor', 'ocr-scanner', 'strict-regex'],
       };
 
       this._saveToCache(textHash, result);
@@ -365,9 +387,9 @@ class DocumentValidator {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // QUICK CONTACT PRE-SCAN
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════════════════════════
+  // QUICK CONTACT SCAN
+  // ═════════════════════════════════════════════════════════════════════════════════════════════════════
 
   _quickContactScan(text) {
     const scan = { emails: [], phones: [], urls: [], handles: [], instructions: [] };
@@ -395,133 +417,16 @@ class DocumentValidator {
     const handles = text.match(this.contactPatterns.socialHandle);
     if (handles) scan.handles = [...new Set(handles)];
 
-    const instructions = text.match(this.contactPatterns.contactInstructions);
+    // CORRECT
+const instructions = text.match(this.contactPatterns.contactInstructions);
     if (instructions) scan.instructions = [...new Set(instructions)];
 
     return scan;
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // AI VALIDATION
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  async _smartAIValidation({ text, hints }) {
-    try {
-      const prompt = `You are a strict content moderator for a freelance platform resume validator.
-
-YOUR TASK: Decide if this resume should be BLOCKED or ALLOWED based on one rule only.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-THE ONE RULE:
-BLOCK if the resume contains ANY attempt to share contact information or
-redirect someone to contact the person outside of this platform.
-
-ALLOW everything else — skills, experience, education, tools, achievements.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-RESUME TEXT:
-"""
-${text.substring(0, 3000)}
-"""
-
-PRE-SCANNED PATTERNS FOUND:
-  Emails       : ${hints.emails.length       ? hints.emails.join(', ')       : 'none'}
-  Phone numbers: ${hints.phones.length       ? hints.phones.join(', ')       : 'none'}
-  URLs / links : ${hints.urls.length         ? hints.urls.join(', ')         : 'none'}
-  @Handles     : ${hints.handles.length      ? hints.handles.join(', ')      : 'none'}
-  Contact hints: ${hints.instructions.length ? hints.instructions.join(', ') : 'none'}
-
-━━━ BLOCK EXAMPLES ━━━
-✗  john@gmail.com                       → email address
-✗  +91 9876543210                       → phone number
-✗  www.johnportfolio.com               → personal website
-✗  "DM me / reach me at / contact me"  → off-platform contact instruction
-✗  "Find me on Instagram: @john"       → redirecting to social media
-
-━━━ ALLOW EXAMPLES ━━━
-✓  "Expert in Instagram Reels editing" → skill mention
-✓  "YouTube content creator"           → experience
-✓  "Adobe Premiere Pro, After Effects" → tools
-✓  "5 years experience in video editing"
-
-KEY DISTINCTION:
-  Platform as SKILL   = ALLOW  ("I edit YouTube videos")
-  Platform as CONTACT = BLOCK  ("Find me on YouTube @channel")
-
-Respond ONLY with this JSON:
-{
-  "decision": "ALLOW" or "BLOCK",
-  "confidence": 0-100,
-  "reasoning": "one clear sentence",
-  "violations": []
-}
-
-violations values (only if BLOCK):
-  "email_address" | "phone_number" | "personal_url" | "social_handle_contact" | "contact_instruction"`;
-
-      const response = await this.ai.groq.chat.completions.create({
-        messages:    [{ role: 'user', content: prompt }],
-        model:       this.ai.model,
-        temperature: 0.1,
-        max_tokens:  300,
-      });
-
-      const raw       = response.choices[0]?.message?.content || '{}';
-      const jsonMatch = raw.match(/\{[\s\S]*?\}/);
-
-      if (jsonMatch) {
-        let parsed;
-        try   { parsed = JSON.parse(jsonMatch[0]); }
-        catch { return this._aiParseError(); }
-
-        const decision = ['ALLOW', 'BLOCK'].includes(parsed.decision?.toUpperCase?.())
-          ? parsed.decision.toUpperCase()
-          : 'BLOCK';
-
-        const confidence = typeof parsed.confidence === 'number'
-          ? Math.min(100, Math.max(0, Math.round(parsed.confidence)))
-          : 50;
-
-        const reasoning = typeof parsed.reasoning === 'string' && parsed.reasoning.trim()
-          ? parsed.reasoning.trim()
-          : 'Unable to determine';
-
-        const validViolationTypes = [
-          'email_address', 'phone_number', 'personal_url',
-          'social_handle_contact', 'contact_instruction',
-        ];
-        const violations = Array.isArray(parsed.violations)
-          ? parsed.violations.filter(v => validViolationTypes.includes(v))
-          : [];
-
-        return { decision, confidence, reasoning, violations };
-      }
-
-      return this._aiParseError();
-
-    } catch (err) {
-      console.error('❌ AI validation error:', err.message);
-      return {
-        decision:   'BLOCK',
-        confidence: 50,
-        reasoning:  'AI validation temporarily unavailable.',
-        violations: ['ai_error'],
-      };
-    }
-  }
-
-  _aiParseError() {
-    return {
-      decision:   'BLOCK',
-      confidence: 50,
-      reasoning:  'Could not parse AI response — defaulting to block for safety.',
-      violations: ['ai_parse_error'],
-    };
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // BLOCKED RESPONSE BUILDER
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+  // HELPERS
+  // ═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
   _blocked(violations, reason, checkedBy, startTime, uploadedFiles, extra = {}) {
     return {
@@ -536,10 +441,6 @@ violations values (only if BLOCK):
       ...extra,
     };
   }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // CACHE
-  // ═══════════════════════════════════════════════════════════════════════════
 
   _hashText(text) {
     return crypto
@@ -574,10 +475,6 @@ violations values (only if BLOCK):
     });
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PERIODIC CLEANUP
-  // ═══════════════════════════════════════════════════════════════════════════
-
   _startPeriodicCleanup() {
     this.cleanupTimer = setInterval(async () => {
       try {
@@ -607,10 +504,6 @@ violations values (only if BLOCK):
 
     if (this.cleanupTimer.unref) this.cleanupTimer.unref();
   }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // SHUTDOWN
-  // ═══════════════════════════════════════════════════════════════════════════
 
   async shutdown() {
     console.log('[DocumentValidator] Shutting down...');

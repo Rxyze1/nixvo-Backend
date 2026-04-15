@@ -3,6 +3,7 @@
 import messageValidationService from '../Security/messageValidationService.js';
 import ImageValidator from '../Security/ImageValidator.js';
 
+
 /**
  * ════════════════════════════════════════════════════════════════
  *              🛡️ CHAT SECURITY SERVICE
@@ -15,8 +16,8 @@ class ChatSecurityService {
   constructor() {
     this.imageValidator = new ImageValidator();
     console.log('🛡️ Chat Security Service initialized');
-    console.log('   ✅ Message Validator: Loaded');
-    console.log('   ✅ Image Validator: Loaded');
+    console.log('   ✅ Message Validator: Loaded (Regex Only)');
+    console.log('   ✅ Image Validator: Loaded (OCR + Regex)');
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -27,7 +28,7 @@ class ChatSecurityService {
     console.log('\n📝 [Chat Security] Validating text message...');
     
     try {
-      // ✅ Use the dedicated message validation service
+      // ✅ Use the dedicated message validation service (Now 100% Regex)
       const result = await messageValidationService.validateMessage(text);
       
       // Transform response to match expected format
@@ -43,8 +44,8 @@ class ChatSecurityService {
         unknownLinks: result.unknownLinks,
         blockedLinks: result.blockedLinks,
         contactInfo: result.contactInfo,
-        confidence: result.aiValidation?.confidence,
-        validationDetails: result.aiValidation,
+        confidence: result.confidence || 0, // ❌ REMOVED: result.aiValidation?.confidence
+        validationDetails: result.layer,    // ❌ REMOVED: result.aiValidation
         cached: result.cached
       };
       
@@ -83,7 +84,7 @@ class ChatSecurityService {
       };
       
       // ═════════════════════════════════════════════════════════════
-      // STEP 1: Validate image content
+      // STEP 1: Validate image content (Uses OCR + Regex now)
       // ═════════════════════════════════════════════════════════════
       console.log('📸 Validating image content...');
       const imageValidation = await this.imageValidator.validate(imageBuffer, {
@@ -92,12 +93,6 @@ class ChatSecurityService {
       });
       
       results.image = imageValidation;
-      
-      console.log(`📊 Image validation:`, {
-        blocked: imageValidation.blocked,
-        confidence: imageValidation.confidence,
-        hasText: !!imageValidation.ocrResult?.text
-      });
       
       // ⚠️ Image has text but not blocked (low confidence)
       if (imageValidation.ocrResult?.text && 
@@ -165,8 +160,6 @@ class ChatSecurityService {
       
     } catch (error) {
       console.error('❌ Image validation error:', error);
-      
-      // Fail-safe: Allow but flag for review
       return {
         allowed: true,
         blocked: false,
@@ -202,11 +195,7 @@ class ChatSecurityService {
         }
       };
       
-      // ═════════════════════════════════════════════════════════════
-      // STEP 1: Check video size (Max 400MB)
-      // ═════════════════════════════════════════════════════════════
       const MAX_VIDEO_SIZE = 400 * 1024 * 1024; // 400MB
-      
       if (videoBuffer.length > MAX_VIDEO_SIZE) {
         return {
           allowed: false,
@@ -218,11 +207,7 @@ class ChatSecurityService {
         };
       }
       
-      // ═════════════════════════════════════════════════════════════
-      // STEP 2: Check video duration (Max 10 minutes)
-      // ═════════════════════════════════════════════════════════════
       const MAX_DURATION = 600; // 10 minutes
-      
       if (metadata.duration && metadata.duration > MAX_DURATION) {
         return {
           allowed: false,
@@ -234,23 +219,16 @@ class ChatSecurityService {
         };
       }
       
-      // ⚠️ Add warning for large videos
       const videoSizeMB = videoBuffer.length / (1024 * 1024);
       if (videoSizeMB > 100) {
-        results.overall.warnings.push(
-          `⚠️ Large video file (${videoSizeMB.toFixed(2)}MB). Upload may take time.`
-        );
+        results.overall.warnings.push(`⚠️ Large video file (${videoSizeMB.toFixed(2)}MB). Upload may take time.`);
       }
       
-      // ═════════════════════════════════════════════════════════════
-      // STEP 3: Validate caption if provided
-      // ═════════════════════════════════════════════════════════════
       if (caption && caption.trim()) {
         console.log('📝 Validating video caption...');
         const captionValidation = await this.validateTextMessage(caption);
         results.caption = captionValidation;
         
-        // ❌ Caption blocked
         if (captionValidation.blocked) {
           return {
             allowed: false,
@@ -263,18 +241,13 @@ class ChatSecurityService {
           };
         }
         
-        // Add caption warnings
         if (captionValidation.warning) {
           results.overall.warnings.push(captionValidation.warning);
         }
       }
       
-      // ⚠️ General video warning
-      results.overall.warnings.push(
-        '⚠️ For your security, avoid sharing personal information in videos.'
-      );
+      results.overall.warnings.push('⚠️ For your security, avoid sharing personal information in videos.');
       
-      // ✅ ALLOW - video passes all checks
       console.log('✅ Video approved');
       
       return {
@@ -289,8 +262,6 @@ class ChatSecurityService {
       
     } catch (error) {
       console.error('❌ Video validation error:', error);
-      
-      // Fail-safe: Allow but flag for review
       return {
         allowed: true,
         blocked: false,
@@ -311,11 +282,7 @@ class ChatSecurityService {
     console.log('\n📎 [Chat Security] Validating file message...');
     
     try {
-      // ═════════════════════════════════════════════════════════════
-      // STEP 1: Check file size (Max 100MB for documents)
-      // ═════════════════════════════════════════════════════════════
       const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
-      
       if (fileBuffer.length > MAX_FILE_SIZE) {
         return {
           allowed: false,
@@ -327,22 +294,14 @@ class ChatSecurityService {
         };
       }
       
-      // ═════════════════════════════════════════════════════════════
-      // STEP 2: Check file type
-      // ═════════════════════════════════════════════════════════════
       const ALLOWED_TYPES = [
-        'application/pdf',
-        'application/msword',
+        'application/pdf', 'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'application/vnd.ms-excel',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'application/vnd.ms-powerpoint',
         'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'text/plain',
-        'text/csv',
-        'application/zip',
-        'application/x-zip-compressed',
-        'application/x-rar-compressed'
+        'text/plain', 'text/csv', 'application/zip', 'application/x-zip-compressed', 'application/x-rar-compressed'
       ];
       
       if (!ALLOWED_TYPES.includes(mimeType)) {
@@ -356,15 +315,7 @@ class ChatSecurityService {
         };
       }
       
-      // ═════════════════════════════════════════════════════════════
-      // STEP 3: Check file name for suspicious content
-      // ═════════════════════════════════════════════════════════════
-      const DANGEROUS_EXTENSIONS = [
-        '.exe', '.bat', '.cmd', '.sh', '.app', '.dmg', 
-        '.scr', '.vbs', '.js', '.jar', '.msi', '.dll',
-        '.com', '.pif', '.cpl', '.hta', '.ws', '.wsf'
-      ];
-      
+      const DANGEROUS_EXTENSIONS = ['.exe', '.bat', '.cmd', '.sh', '.app', '.dmg', '.scr', '.vbs', '.js', '.jar', '.msi', '.dll', '.com', '.pif', '.cpl', '.hta', '.ws', '.wsf'];
       const fileExt = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
       
       if (DANGEROUS_EXTENSIONS.includes(fileExt)) {
@@ -378,7 +329,6 @@ class ChatSecurityService {
         };
       }
       
-      // ✅ ALLOW - file passes all checks
       console.log('✅ File approved');
       
       return {
@@ -391,17 +341,11 @@ class ChatSecurityService {
         reason: 'File approved',
         action: 'ALLOW',
         layer: 'all_checks_passed',
-        fileInfo: {
-          name: fileName,
-          size: fileBuffer.length,
-          type: mimeType
-        }
+        fileInfo: { name: fileName, size: fileBuffer.length, type: mimeType }
       };
       
     } catch (error) {
       console.error('❌ File validation error:', error);
-      
-      // Fail-safe: Allow but flag for review
       return {
         allowed: true,
         blocked: false,

@@ -8,6 +8,8 @@ import {
 } from '../../../Email/emailService.js';
 import validationService from '../../../Service/validationService.js';   // ✅ ADD
 
+import { notifyApplicationAccepted, notifyApplicationRejected } from '../../../Service/Notification/NotificationService.js';
+
 
 const buildBadge = (emp) => {
   
@@ -497,6 +499,24 @@ export const acceptApplication = async (req, res) => {
     await Promise.allSettled(emailJobs);
     console.log(`   📧 ${emailJobs.length} email(s) dispatched\n`);
 
+        // ── 🚀 Send Push Notification (via Notification Service) ──
+    notifyApplicationAccepted(
+      application.jobId,
+      application.employeeId,
+      { clientName: req.user.fullname, clientMessage: message }
+    ).catch(err => console.error(`   ⚠️  Accept push failed: ${err.message}`));
+
+    // ── 🚀 Send Push to rejected applicants too ──
+    others.forEach(other => {
+      notifyApplicationRejected(
+        application.jobId,
+        other.employeeId,
+        other._id,
+        'Thank you for applying. We hired another candidate.',
+        req.user.fullname
+      ).catch(err => console.error(`   ⚠️  Reject push failed: ${err.message}`));
+    });
+
     return res.json({
       success: true,
       message: 'Application accepted successfully',
@@ -583,6 +603,16 @@ export const rejectApplication = async (req, res) => {
     }).catch(err => {
       console.error(`   ⚠️  Email failed: ${err.message}`);
     });
+
+
+        // ── 🚀 Send Push Notification (via Notification Service) ──
+    notifyApplicationRejected(
+      application.jobId,
+      application.employeeId,
+      application._id,
+      finalMessage,
+      req.user.fullname
+    ).catch(err => console.error(`   ⚠️  Reject push failed: ${err.message}`));
 
     return res.json({
       success: true,

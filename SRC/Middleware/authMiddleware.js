@@ -28,9 +28,7 @@ export const COOKIE_OPTIONS = {
 
 // ✅ FIX 1 — supports both cookie (web) and header (mobile)
 const extractToken = (req, tokenName = 'accessToken') => {
-    if (req.cookies && req.cookies[tokenName]) {
-        return req.cookies[tokenName];
-    }
+    // 1. PRIORITY: Check Headers (Required for Expo React Native Mobile)
     if (tokenName === 'accessToken') {
         const authHeader = req.headers['authorization'];
         if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -41,10 +39,18 @@ const extractToken = (req, tokenName = 'accessToken') => {
         const refreshHeader = req.headers['x-refresh-token'];
         if (refreshHeader) return refreshHeader;
     }
+
+    // 2. FALLBACK: Check Cookies (Used by Web Browsers)
+    if (req.cookies && req.cookies[tokenName]) {
+        return req.cookies[tokenName];
+    }
+
     return null;
 };
-
 export const protect = async (req, res, next) => {
+    // ⭐ BACKUP ORIGINAL RES.JSON SO WE CAN INTERCEPT IT
+    const originalJson = res.json.bind(res);
+
     try {
         const accessToken = extractToken(req, 'accessToken');
 
@@ -124,9 +130,14 @@ export const protect = async (req, res, next) => {
                         user.role
                     );
 
-                    // ✅ FIX 2 — web gets cookie, mobile reads header
+                    // 1. Give it to Web via HttpOnly Cookie
                     res.cookie('accessToken', newAccessToken, COOKIE_OPTIONS.ACCESS_TOKEN);
+                    
+                    // 2. Give it to Expo via Header
                     res.setHeader('x-new-access-token', newAccessToken);
+
+                    // 3. Save it to req object
+                    req.newAccessToken = newAccessToken; 
 
                     req.user          = user;
                     req.userId        = user._id;
@@ -135,6 +146,19 @@ export const protect = async (req, res, next) => {
                     req.tokenRefreshed = true;
 
                     console.log(`✅ Token auto-refreshed for ${user.email}`);
+
+                    // ════════════════════════════════════════════════════════
+                    // ⭐⭐⭐ THE MAGIC TRICK FOR EXPO (4 LINES OF CODE) ⭐⭐⭐
+                    // We override res.json. If a new token was generated, 
+                    // we secretly sneak it into the response body for Expo,
+                    // while Web safely uses the HttpOnly cookie above.
+                    // ════════════════════════════════════════════════════════
+                    res.json = (data) => {
+                        if (req.newAccessToken && data && data.data) {
+                            data.data.newAccessToken = req.newAccessToken;
+                        }
+                        return originalJson(data);
+                    };
 
                     return next();
 

@@ -2,6 +2,7 @@
 
 import mongoose from 'mongoose';
 import { backupDocument } from '../../Service/Backup-DB/backupService.js';
+import { sendPushNotification } from '../../Controller/Notification.Controller/Notification-Helper/pushSender.js'; // ✅ NEW
 
 const notificationSchema = new mongoose.Schema({
 
@@ -30,10 +31,10 @@ const notificationSchema = new mongoose.Schema({
       'job_completed',
       'job_cancelled',
       'job_closing_soon',
-      'message',                    // ✅ NEW
-      'follow',                     // ✅ NEW
-      'review_received',            // ✅ NEW
-      'payment_received',           // ✅ NEW
+      'message',                    
+      'follow',                     
+      'review_received',            
+      'payment_received',           
     ],
     required: true,
     index: true
@@ -56,16 +57,12 @@ const notificationSchema = new mongoose.Schema({
   },
 
   // ═══════════════════════════════════════════════════
-  // RELATED DATA
+  // ✅ FIXED: RELATED DATA (Mixed type to allow navigation strings like "screen")
   // ═══════════════════════════════════════════════════
 
   data: {
-    jobId:         { type: mongoose.Schema.Types.ObjectId, ref: 'Job' },
-    clientId:      { type: mongoose.Schema.Types.ObjectId, ref: 'Client' },
-    employeeId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
-    applicationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Application' },
-    conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation' }, // ✅ NEW
-    senderId:      { type: mongoose.Schema.Types.ObjectId, ref: 'User' },         // ✅ NEW
+    type: mongoose.Schema.Types.Mixed, // ✅ CHANGED from strict Object to Mixed!
+    default: {}
   },
 
   // ═══════════════════════════════════════════════════
@@ -95,7 +92,34 @@ const notificationSchema = new mongoose.Schema({
   readAt: {
     type: Date,
     default: null
-  }
+  },
+
+  senderDetails: {
+    id: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    fullname: String,
+    username: String,
+    profilePicture: String,
+    userType: { type: String, enum: ['employee', 'client'] },
+    badge: {
+      hasBadge: Boolean,
+      badgeType: { type: String, enum: ['blue-verified', 'admin-verified', 'none'] },
+      badgeLabel: String,
+      blueVerified: { status: Boolean },
+      adminVerified: { status: Boolean },
+      tier: { type: String, enum: ['premium', 'verified', 'free'] },
+    },
+  },
+
+  actionUrl: {
+    type: String,
+    default: null
+  },
+
+  priority: {
+    type: String,
+    enum: ['low', 'normal', 'high'],
+    default: 'normal'
+  },
 
 }, {
   timestamps: true
@@ -137,20 +161,66 @@ notificationSchema.statics.markAllRead = function (userId) {
   );
 };
 
-// ─────────────────────────────────────────────────────────────
-// BACKUP HOOKS
-// ─────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// 🪝 HOOKS: Combined Backup + Auto-Push (Runs safely together)
+// ═══════════════════════════════════════════════════════════════════════════
 
 notificationSchema.pre('save', function () {
   this._wasNew = this.isNew;
 });
 
-notificationSchema.post('save', async function () {
+notificationSchema.post('save', async function (doc, next) {
+  
+  // 1. Handle Auto-Push ONLY if it's a brand new document
+  if (doc._wasNew) {
+    
+    // 🛑 SAFETY CHECK: Don't send push to yourself!
+    const senderIdStr = doc.data?.senderId?.toString();
+    const userIdStr = doc.userId?.toString();
+    
+    if (senderIdStr && senderIdStr === userIdStr) {
+      // This is the user's own action, skip push.
+      if (next) next();
+      return; 
+    }
+
+    // Fire push in the background (don't block the DB save or backup)
+    setImmediate(async () => {
+      try {
+        const pushData = {
+          // Navigation
+          screen: doc.data?.screen || 'Notifications',
+          // IDs
+          ...(doc.data?.jobId && { jobId: doc.data.jobId.toString() }),
+          ...(doc.data?.applicationId && { applicationId: doc.data.applicationId.toString() }),
+          ...(doc.data?.conversationId && { conversationId: doc.data.conversationId.toString() }),
+          ...(doc.data?.senderId && { senderId: doc.data.senderId.toString() }),
+          // Sender details for the popup UI
+          ...(doc.data?.senderType && { senderType: doc.data.senderType }),
+          ...(doc.data?.senderProfilePic && { senderProfilePic: doc.data.senderProfilePic }),
+        };
+
+        await sendPushNotification(doc.userId, doc.title, doc.message, pushData);
+        
+        // Optional: Mark in DB that push was sent successfully
+        // await Notification.updateOne({ _id: doc._id }, { $set: { pushSent: true } });
+
+      } catch (pushError) {
+        console.error(`❌ [Auto-Push Failed] Notif ${doc._id}:`, pushError.message);
+        // Optional: Mark error in DB
+        // await Notification.updateOne({ _id: doc._id }, { $set: { pushError: pushError.message } });
+      }
+    });
+  }
+
+  // 2. Handle Backup (Your existing logic, unchanged)
   try {
-    await backupDocument('notifications', this._wasNew ? 'create' : 'update', this);
+    await backupDocument('notifications', doc._wasNew ? 'create' : 'update', doc);
   } catch (err) {
     console.error('⚠️ [BACKUP] post.save failed (notifications):', err.message);
   }
+  
+  if (next) next();
 });
 
 notificationSchema.post('findOneAndDelete', async function (doc) {
@@ -158,7 +228,7 @@ notificationSchema.post('findOneAndDelete', async function (doc) {
   try {
     await backupDocument('notifications', 'delete', doc);
   } catch (err) {
-    console.error('⚠️ [BACKUP] post.findOneAndDelete failed:', err.message);
+    console.error('⚠️ [BACKUP] post.findOneAndDelete failed (notifications):', err.message);
   }
 });
 
@@ -166,7 +236,7 @@ notificationSchema.post('deleteOne', { document: true, query: false }, async fun
   try {
     await backupDocument('notifications', 'delete', this);
   } catch (err) {
-    console.error('⚠️ [BACKUP] post.deleteOne failed:', err.message);
+    console.error('⚠️ [BACKUP] post.deleteOne failed (notifications):', err.message);
   }
 });
 
@@ -175,7 +245,7 @@ notificationSchema.post('findOneAndUpdate', async function (doc) {
   try {
     await backupDocument('notifications', 'update', doc);
   } catch (err) {
-    console.error('⚠️ [BACKUP] post.findOneAndUpdate failed:', err.message);
+    console.error('⚠️ [BACKUP] post.findOneAndUpdate failed (notifications):', err.message);
   }
 });
 

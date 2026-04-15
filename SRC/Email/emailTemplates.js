@@ -512,11 +512,11 @@ export const employeeApprovalTemplate = (fullname) => {
         </div>
         <div class="content">
             <p>Hi <strong>${fullname}</strong>,</p>
-            <p><strong>Congratulations!</strong> Your employee account has been approved by our admin team. You can now start browsing and applying for jobs!</p>
+            <p><strong>Congratulations!</strong> Your freelance account has been approved by our admin team. You can now start browsing and applying for jobs!</p>
             
             <div class="success-box">
                 <strong>🎉 Your Account is Now Active!</strong>
-                <p style="margin-top: 10px;">You have full access to all employee features.</p>
+                <p style="margin-top: 10px;">You have full access to all freelance features.</p>
             </div>
 
             <div class="info-box">

@@ -157,7 +157,9 @@ async createRazorpaySubscription(userId, userType, plan, billingCycle = 'monthly
       plan_id:         razorpayPlanId,
       customer_notify: 1,               // Razorpay sends payment link to customer
       quantity:        1,
-      total_count: billingCycle === 'yearly' ? 12 : 120, // 120 months = 10 years
+
+      total_count: billingCycle === 'yearly' ? 12 : 1,
+
       notes: {
         userId:      userId.toString(), // ← critical — webhook reads this
         userType,

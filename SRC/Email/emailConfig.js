@@ -44,7 +44,7 @@ export const emailConfig = {
 
 export const appConfig = {
     appName: 'Nixvo',
-    appUrl: 'https://www.nixvo.in',
+    appUrl: 'nixvo://',
     supportEmail: 'support@nixvo.in',
     logoUrl: 'https://www.nixvo.in/logo.png',
 };

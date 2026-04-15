@@ -1,5 +1,3 @@
-// Services/NotificationService.js
-
 import Employee from '../../Models/USER-Auth/Employee-Model.js';
 import Job from '../../Models/USER-Auth/Client/Job.js';
 import Notification from '../../Models/Notification-Model/Notification.js';
@@ -11,10 +9,9 @@ import {
   sendJobCompleted,
   sendJobClosingSoonNotification
 } from '../../Email/emailService.js';
-import { sendPushNotificationsToUser, sendBatchPushNotifications } from './pushNotificationService.js'; // ✅ NEW
 
 // ══════════════════════════════════════════════════════════════
-// CORE: Create notification (DB + Push)
+// CORE: Create notification (DB ONLY - Model Hook sends Push)
 // ══════════════════════════════════════════════════════════════
 
 export const createNotification = async (
@@ -22,33 +19,32 @@ export const createNotification = async (
   type,
   title,
   message,
-  data = {},
-  pushTitle = null,
-  pushBody = null
+  data = {}
 ) => {
   try {
-    // ✅ Save to DB
-    const notification = await Notification.create({ userId, type, title, message, data });
+    // Inject navigation screen based on type
+    let enrichedData = { ...data };
 
-    // ✅ Send push notification (if provided)
-    if (pushTitle && pushBody) {
-      setImmediate(() => {
-        sendPushNotificationsToUser({
-          userId,
-          type,
-          title: pushTitle,
-          body: pushBody,
-          data: { notificationId: notification._id.toString(), ...data }
-        }).catch(err => {
-          console.error(`⚠️  Push notification failed for ${userId}:`, err.message);
-          // Update notification record with error
-          Notification.findByIdAndUpdate(
-            notification._id,
-            { pushSent: false, pushError: err.message }
-          ).catch(e => console.error('Failed to log push error:', e.message));
-        });
-      });
+    if (type === 'job_match' || type === 'job_closing_soon') {
+      enrichedData.screen = 'JobDetails';
+    } else if (type === 'new_application') {
+      enrichedData.screen = 'JobApplications'; 
+    } else if (type === 'application_accepted' || type === 'application_rejected') {
+      enrichedData.screen = 'ApplicationStatus';
+    } else if (type === 'job_completed') {
+      enrichedData.screen = 'Wallet';
+    } else if (type === 'message') {
+      enrichedData.screen = 'MessageScreen';
     }
+
+    // Save to DB -> Model Hook AUTOMATICALLY triggers push notification!
+    const notification = await Notification.create({ 
+      userId, 
+      type, 
+      title, 
+      message, 
+      data: enrichedData 
+    });
 
     return notification;
 
@@ -59,34 +55,32 @@ export const createNotification = async (
 };
 
 // ══════════════════════════════════════════════════════════════
-// CORE: Bulk create notifications (DB + Push)
+// CORE: Bulk create notifications (DB ONLY - Model Hook sends Push)
 // ══════════════════════════════════════════════════════════════
 
-export const createBulkNotifications = async (
-  notifications,
-  pushConfig = null // { type, title, body }
-) => {
+export const createBulkNotifications = async (notifications) => {
   try {
     if (!notifications.length) return [];
 
-    // ✅ Save all to DB
-    const created = await Notification.insertMany(notifications, { ordered: false });
+    // Inject navigation screen for bulk notifications
+    const enrichedNotifications = notifications.map(notif => {
+      let enrichedData = { ...notif.data };
 
-    // ✅ Send push notifications (if config provided)
-    if (pushConfig) {
-      const userIds = [...new Set(notifications.map(n => n.userId.toString()))];
+      if (notif.type === 'job_match' || notif.type === 'job_closing_soon') {
+        enrichedData.screen = 'JobDetails';
+      } else if (notif.type === 'new_application') {
+        enrichedData.screen = 'JobApplications';
+      } else if (notif.type === 'application_accepted' || notif.type === 'application_rejected') {
+        enrichedData.screen = 'ApplicationStatus';
+      } else if (notif.type === 'job_completed') {
+        enrichedData.screen = 'Wallet';
+      }
 
-      setImmediate(() => {
-        sendBatchPushNotifications(userIds, {
-          type: pushConfig.type,
-          title: pushConfig.title,
-          body: pushConfig.body,
-          data: pushConfig.data || {}
-        }).catch(err => {
-          console.error('⚠️  Batch push notifications failed:', err.message);
-        });
-      });
-    }
+      return { ...notif, data: enrichedData };
+    });
+
+    // Save all to DB -> Model Hook AUTOMATICALLY triggers push notifications!
+    const created = await Notification.create(enrichedNotifications);
 
     return created;
 
@@ -97,7 +91,7 @@ export const createBulkNotifications = async (
 };
 
 // ══════════════════════════════════════════════════════════════
-// 🔔 JOB POSTED: Notify matching employees (DB + Email + Push)
+// 🔔 JOB POSTED: Notify matching employees (DB + Email)
 // ══════════════════════════════════════════════════════════════
 
 export const notifyMatchingEmployees = async (job) => {
@@ -142,7 +136,7 @@ export const notifyMatchingEmployees = async (job) => {
       .lean();
     const clientName = client?.userId?.fullname || 'A Client';
 
-    // ✅ DB Notifications (bulk with push)
+    // ✅ DB Notifications (Push sent automatically via Model Hook)
     const dbNotifications = matchingEmployees.map(emp => ({
       userId: emp.userId._id,
       type: 'job_match',
@@ -151,17 +145,9 @@ export const notifyMatchingEmployees = async (job) => {
       data: { jobId, clientId }
     }));
 
-    const created = await createBulkNotifications(
-      dbNotifications,
-      {
-        type: 'job_match',
-        title: `🎯 New Job: ${jobTitle}`,
-        body: `${currency} ${price} • ${requiredSkills.join(', ')}`,
-        data: { jobId, clientId }
-      }
-    );
+    const created = await createBulkNotifications(dbNotifications); // ✅ FIXED: Removed ghost arguments
 
-    console.log(`   📬 ${created.length} notifications saved`);
+    console.log(`   📬 ${created.length} notifications saved & push triggered`);
 
     // ✅ Emails (parallel)
     await Promise.allSettled(
@@ -190,24 +176,38 @@ export const notifyMatchingEmployees = async (job) => {
 };
 
 // ══════════════════════════════════════════════════════════════
-// 📩 NEW APPLICATION: Notify client (DB + Email + Push)
+// 📩 NEW APPLICATION: Notify client (DB + Email)
+// ══════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════
+// 📩 NEW APPLICATION: Notify client (DB + Email)
 // ══════════════════════════════════════════════════════════════
 
 export const notifyNewApplication = async (job, applicantUser, applicantEmployee) => {
   try {
+    // ✅ FIX: Safely extract client ID + info (works if populated OR plain ObjectId)
+    const clientUserId = job.userId?._id?.toString() || job.userId?.toString();
+    const clientEmail  = job.userId?.email  || '';
+    const clientName   = job.userId?.fullname || 'Client';
+
+    if (!clientUserId) {
+      console.error('❌ notifyNewApplication: No client userId found on job:', job._id);
+      return;
+    }
+
+    console.log(`🔔 [App Notify] Client: ${clientName} (${clientUserId})`);
+
     await Promise.allSettled([
       createNotification(
-        job.userId._id,
+        clientUserId,   // ✅ SAFE ID now
         'new_application',
         `📩 New Application: ${job.jobTitle}`,
         `${applicantUser.fullname} has applied to your job.`,
-        { jobId: job._id, employeeId: applicantEmployee._id },
-        `📩 New Application`,           // ✅ push title
-        `${applicantUser.fullname} applied to "${job.jobTitle}"`  // ✅ push body
+        { jobId: job._id, employeeId: applicantEmployee._id }
       ),
       sendNewApplicationToClient(
-        job.userId.email,
-        job.userId.fullname,
+        clientEmail,            // ✅ SAFE email
+        clientName,             // ✅ SAFE name
         applicantUser.fullname,
         job.jobTitle,
         job._id,
@@ -220,7 +220,7 @@ export const notifyNewApplication = async (job, applicantUser, applicantEmployee
 };
 
 // ══════════════════════════════════════════════════════════════
-// ✅ APPLICATION ACCEPTED: Notify employee (DB + Email + Push)
+// ✅ APPLICATION ACCEPTED: Notify employee (DB + Email)
 // ══════════════════════════════════════════════════════════════
 
 export const notifyApplicationAccepted = async (job, employeeUser, applicationDetails = {}) => {
@@ -231,9 +231,7 @@ export const notifyApplicationAccepted = async (job, employeeUser, applicationDe
         'application_accepted',
         `✅ Application Accepted: ${job.jobTitle}`,
         `Your application for "${job.jobTitle}" was accepted!`,
-        { jobId: job._id, clientId: job.clientId },
-        `✅ Application Accepted`,      // ✅ push title
-        `"${job.jobTitle}" • ${job.price} ${job.currency}`  // ✅ push body
+        { jobId: job._id, clientId: job.clientId } // ✅ FIXED: Removed ghost arguments
       ),
       sendApplicationAccepted(
         employeeUser.email,
@@ -254,7 +252,7 @@ export const notifyApplicationAccepted = async (job, employeeUser, applicationDe
 };
 
 // ══════════════════════════════════════════════════════════════
-// ❌ APPLICATION REJECTED: Notify employee (DB + Email + Push)
+// ❌ APPLICATION REJECTED: Notify employee (DB + Email)
 // ══════════════════════════════════════════════════════════════
 
 export const notifyApplicationRejected = async (
@@ -271,9 +269,7 @@ export const notifyApplicationRejected = async (
         'application_rejected',
         `❌ Application Update: ${job.jobTitle}`,
         `Your application for "${job.jobTitle}" was not selected.`,
-        { jobId: job._id, clientId: job.clientId },
-        `Application Update`,           // ✅ push title
-        `Not selected for "${job.jobTitle}"`  // ✅ push body
+        { jobId: job._id, clientId: job.clientId } // ✅ FIXED: Removed ghost arguments
       ),
       sendApplicationRejected(
         employeeUser.email,
@@ -292,7 +288,7 @@ export const notifyApplicationRejected = async (
 };
 
 // ══════════════════════════════════════════════════════════════
-// 🎉 JOB COMPLETED: Notify both (DB + Email + Push)
+// 🎉 JOB COMPLETED: Notify both (DB + Email)
 // ══════════════════════════════════════════════════════════════
 
 export const notifyJobCompleted = async (job, clientUser, employeeUser) => {
@@ -303,18 +299,14 @@ export const notifyJobCompleted = async (job, clientUser, employeeUser) => {
         'job_completed',
         `🎉 Job Completed: ${job.jobTitle}`,
         `Your job "${job.jobTitle}" has been marked as complete.`,
-        { jobId: job._id },
-        `🎉 Job Completed`,
-        `"${job.jobTitle}" is complete`
+        { jobId: job._id } // ✅ FIXED: Removed ghost arguments
       ),
       createNotification(
         employeeUser._id,
         'job_completed',
         `🎉 Job Completed: ${job.jobTitle}`,
         `The job "${job.jobTitle}" has been marked as complete.`,
-        { jobId: job._id },
-        `🎉 Job Completed`,
-        `"${job.jobTitle}" is complete`
+        { jobId: job._id } // ✅ FIXED: Removed ghost arguments
       ),
       sendJobCompleted(clientUser.email, clientUser.fullname, job.jobTitle, 'client', job._id),
       sendJobCompleted(employeeUser.email, employeeUser.fullname, job.jobTitle, 'employee', job._id)
@@ -325,7 +317,7 @@ export const notifyJobCompleted = async (job, clientUser, employeeUser) => {
 };
 
 // ══════════════════════════════════════════════════════════════
-// ⏳ JOB CLOSING SOON: Notify employees (DB + Email + Push)
+// ⏳ JOB CLOSING SOON: Notify employees (DB + Email)
 // ══════════════════════════════════════════════════════════════
 
 export const notifyJobClosingSoon = async (job) => {
@@ -375,17 +367,9 @@ export const notifyJobClosingSoon = async (job) => {
       data: { jobId, clientId }
     }));
 
-    const created = await createBulkNotifications(
-      dbNotifications,
-      {
-        type: 'job_closing_soon',
-        title: `⏳ Hurry: ${jobTitle}`,
-        body: `Closes in 24 hours • ${currency} ${price}`,
-        data: { jobId, clientId }
-      }
-    );
+    const created = await createBulkNotifications(dbNotifications); // ✅ FIXED: Removed ghost arguments
 
-    console.log(`   📬 ${created.length} notifications saved`);
+    console.log(`   📬 ${created.length} notifications saved & push triggered`);
 
     await Promise.allSettled(
       matchingEmployees.map(emp =>

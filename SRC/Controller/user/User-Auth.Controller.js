@@ -667,28 +667,82 @@ export const verifyResetOTP = async (req, res) => {
 // 8️⃣ LOGOUT
 // ═══════════════════════════════════════════════════════════════
 
+// export const logout = async (req, res) => {
+//   try {
+//     const refreshToken = req.cookies.refreshToken;
+//     const userId       = req.userId;
+
+//     logger.info('LOGOUT REQUEST', { userId });
+// // ✅ Revoke ALL sessions for this user + fallback for userId
+// const resolvedUserId = req.userId ?? req.user?._id;
+
+// if (resolvedUserId) {
+//   await RefreshToken.updateMany(
+//     { userId: resolvedUserId, isRevoked: false },
+//     { isRevoked: true, revokedAt: new Date() }
+//   ).catch(() => null);
+
+
+//   // ⭐⭐⭐ ADD THIS: Nuke the push token from the database! ⭐⭐⭐
+//       await User.findByIdAndUpdate(
+//         resolvedUserId,
+//         { $unset: { expoPushToken: 1, pushTokenUpdatedAt: 1, pushTokenPlatform: 1 } }
+//       ).catch(() => null);
+// }
+
+
+
+//     res.clearCookie('accessToken',  COOKIE_OPTIONS.ACCESS_TOKEN);
+//     res.clearCookie('refreshToken', COOKIE_OPTIONS.REFRESH_TOKEN);
+
+//     logger.info('LOGOUT SUCCESSFUL', { userId });
+
+//     return successResponse(res, { userId }, 'Logged out successfully');
+
+//   } catch (error) {
+//     logger.error('LOGOUT ERROR', error.message);
+//     return errorResponse(res, 500, 'Logout failed');
+//   }
+// };
+
+
 export const logout = async (req, res) => {
   try {
-    const refreshToken = req.cookies.refreshToken;
-    const userId       = req.userId;
+    const resolvedUserId = req.userId ?? req.user?._id;
 
-    logger.info('LOGOUT REQUEST', { userId });
-// ✅ Revoke ALL sessions for this user + fallback for userId
-const resolvedUserId = req.userId ?? req.user?._id;
+    logger.info('LOGOUT REQUEST', { userId: resolvedUserId });
 
-if (resolvedUserId) {
-  await RefreshToken.updateMany(
-    { userId: resolvedUserId, isRevoked: false },
-    { isRevoked: true, revokedAt: new Date() }
-  ).catch(() => null);
-}
+    if (resolvedUserId) {
+      // 1. Revoke ALL refresh sessions for this user
+      await RefreshToken.updateMany(
+        { userId: resolvedUserId, isRevoked: false },
+        { isRevoked: true, revokedAt: new Date() }
+      );
 
+      // 2. Nuke push token from database
+      try {
+        const result = await User.findByIdAndUpdate(
+          resolvedUserId,
+          { $unset: { expoPushToken: 1, pushTokenUpdatedAt: 1, pushTokenPlatform: 1 } }
+        );
+        
+        if (result) {
+          logger.info('Push token cleared', { userId: resolvedUserId });
+        } else {
+          logger.warn('User not found for token clear', { userId: resolvedUserId });
+        }
+      } catch (tokenErr) {
+        logger.error('Push token clear failed', tokenErr.message);
+      }
+    }
+
+    // 3. Clear cookies
     res.clearCookie('accessToken',  COOKIE_OPTIONS.ACCESS_TOKEN);
     res.clearCookie('refreshToken', COOKIE_OPTIONS.REFRESH_TOKEN);
 
-    logger.info('LOGOUT SUCCESSFUL', { userId });
+    logger.info('LOGOUT SUCCESSFUL', { userId: resolvedUserId });
 
-    return successResponse(res, { userId }, 'Logged out successfully');
+    return successResponse(res, { userId: resolvedUserId }, 'Logged out successfully');
 
   } catch (error) {
     logger.error('LOGOUT ERROR', error.message);

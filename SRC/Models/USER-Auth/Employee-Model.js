@@ -134,7 +134,7 @@ const EmployeeSchema = new mongoose.Schema(
       },
       verificationMethod: {
         type: String,
-        enum: ['call', 'manual', 'document'],
+        enum: ['call', 'manual', 'document' ,'automatic'],
       },
     },
 
@@ -305,6 +305,12 @@ const EmployeeSchema = new mongoose.Schema(
         min: 0,
         max: 168,
       },
+
+          // 👇 ADD THIS
+    lastViewedApplicationUpdates: {
+      type: Date,
+      default: null,
+    },
     },
   },
   {

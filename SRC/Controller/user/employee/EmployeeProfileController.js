@@ -8,6 +8,8 @@ import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import r2Client from '../../../Config/r2Config.js';
 import { validateContent } from '../../../Service/validationService.js';
 
+import { sendEmployeeApproval } from '../../../Email/emailService.js';
+
 const BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME;
 const BUCKET_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL;
 
@@ -534,17 +536,53 @@ export const createOrUpdateEmployeeProfile = async (req, res) => {
     // ═══════════════════════════════════════════════════════════════
     // STEP 10: SAVE TO DATABASE
     // ═══════════════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════════════
+    // STEP 10: SAVE TO DATABASE + AUTO-VERIFY
+    // ═══════════════════════════════════════════════════════════════
 
-     // TO ✅
      const wasAlreadyCompleted = employee.profileCompleted;
      
      employee.profileCompleted = true;
      await employee.save();
      
-     // ── On first completion → set to pending for admin review ──
+     // ── On first completion → AUTO-APPROVE employee instantly ──
      if (!wasAlreadyCompleted) {
-       await User.findByIdAndUpdate(userId, { status: 'pending' });
-       console.log('⏳ Employee set to pending — awaiting admin review');
+       // Update User document - keep active and mark as verified
+       await User.findByIdAndUpdate(
+         userId, 
+         { 
+           status: 'active',           // Keep active, NOT pending!
+           isAdminVerified: true,      // Mark as verified
+           adminVerifiedAt: new Date() // Record when auto-approved
+         }
+       );
+       
+       // Update Employee verification details
+       employee.verificationDetails = {
+         status: 'approved',
+         verificationMethod: 'automatic',
+         verificationDate: new Date(),
+         rejectionReason: null
+       };
+       
+       employee.adminVerified = {
+         status: true,
+         verifiedAt: new Date(),
+         verifiedBy: 'system'
+       };
+       
+       await employee.save();
+       
+       console.log('✅ Employee auto-verified and activated instantly!');
+       
+       // 📧 Optional: Send verification success email (uncomment to enable)
+       try {
+         const userForEmail = await User.findById(userId);
+         await sendEmployeeApproval(userForEmail.email, userForEmail.fullname);
+         console.log('📧 Verification email sent');
+       } catch (emailError) {
+         console.warn('⚠️ Failed to send verification email:', emailError.message);
+       }
      }
 
     // ═══════════════════════════════════════════════════════════════
@@ -554,11 +592,9 @@ export const createOrUpdateEmployeeProfile = async (req, res) => {
     return res.status(200).json({
       success: true,
 
-
-      // TO ✅
-message: wasAlreadyCompleted
-  ? '✅ Employee profile updated successfully'
-  : '✅ Profile completed — awaiting admin review',
+      message: wasAlreadyCompleted
+        ? '✅ Employee profile updated successfully'
+        : '🎉 Profile completed! Your account is now active and verified.',
 
       data: {
         userId: employee.userId,
@@ -572,31 +608,34 @@ message: wasAlreadyCompleted
         jobStats: employee.jobStats,
         followersCount: employee.followersCount,
         profileCompleted: employee.profileCompleted,
-        awaitingAdminReview: !wasAlreadyCompleted,
+        
+        // Updated flags for auto-approval
+        autoApproved: !wasAlreadyCompleted,
+        isInstantlyActive: true,
+        awaitingAdminReview: false,
 
+        badge: employee.hasBadge ? {
+          show:   true,
+          type:   employee.badgeType,
+          label:  employee.badgeLabel,
+          icon:   employee.badgeType === 'blue_verified'  ? 'verified'     :
+                  employee.badgeType === 'admin_verified'  ? 'shield-check' : 'badge',
+          color:  employee.badgeType === 'blue_verified'  ? '#0066FF'       :
+                  employee.badgeType === 'admin_verified'  ? '#00B37E'       : '#888',
+          bg:     employee.badgeType === 'blue_verified'  ? '#EBF5FF'       :
+                  employee.badgeType === 'admin_verified'  ? '#E6FAF5'       : '#f0f0f0',
+        } : { show: false },
 
-
-// TO ✅
-badge: employee.hasBadge ? {
-  show:   true,
-  type:   employee.badgeType,
-  label:  employee.badgeLabel,
-  icon:   employee.badgeType === 'blue_verified'  ? 'verified'     :
-          employee.badgeType === 'admin_verified'  ? 'shield-check' : 'badge',
-  color:  employee.badgeType === 'blue_verified'  ? '#0066FF'       :
-          employee.badgeType === 'admin_verified'  ? '#00B37E'       : '#888',
-  bg:     employee.badgeType === 'blue_verified'  ? '#EBF5FF'       :
-          employee.badgeType === 'admin_verified'  ? '#E6FAF5'       : '#f0f0f0',
-} : { show: false },
-
-adminVerified: {
-  status:     employee.adminVerified?.status ?? false,
-  verifiedAt: employee.adminVerified?.verifiedAt ?? null,
-},
+        adminVerified: {
+          status:     employee.adminVerified?.status ?? (!wasAlreadyCompleted),  // true for newly completed profiles
+          verifiedAt: employee.adminVerified?.verifiedAt ?? (!wasAlreadyCompleted ? new Date() : null),
+        },
+        
         createdAt: employee.createdAt,
         updatedAt: employee.updatedAt,
       },
     });
+
   } catch (error) {
     console.error('❌ ERROR in createOrUpdateEmployeeProfile:', error);
     return res.status(500).json({
@@ -964,6 +1003,11 @@ isPremium: hasPremium,
     });
   }
 };
+
+
+
+
+
 
 // ═══════════════════════════════════════════════════════════════
 // EXPORTS

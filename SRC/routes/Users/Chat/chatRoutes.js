@@ -28,7 +28,7 @@ import {
   startDirectConversation,
 } from '../../../Controller/user/Chat.Controller/searchUsers.controller.js';
 
-import { protect }           from '../../../Middleware/authMiddleware.js';
+import { protect , requireProfileCompleted, requireEmployeeOrClient}           from '../../../Middleware/authMiddleware.js';
 import { handleUploadError } from '../../../Middleware/uploadMiddleware.js';
 
 export const chatRoutes = express.Router();
@@ -36,7 +36,7 @@ export const chatRoutes = express.Router();
 // ═════════════════════════════════════════════════════════════
 // 🔐 ALL ROUTES REQUIRE AUTHENTICATION
 // ═════════════════════════════════════════════════════════════
-chatRoutes.use(protect);
+chatRoutes.use(protect,requireProfileCompleted, requireEmployeeOrClient);
 
 // ═════════════════════════════════════════════════════════════
 // 🔍 SEARCH ROUTES

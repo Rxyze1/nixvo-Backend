@@ -41,12 +41,20 @@ import { employeeClientRouter }     from './routes/Users/Employee/employeeClient
 // ─── Routes — Chat, Calls, Notifications ─────────────────────
 import chatRoutes             from './routes/Users/Chat/chatRoutes.js';
 import { CallRouter }         from './routes/Call-Route/Call.Route.js';
+
+// NOtuficatuion
 import { NotificationRouter } from './routes/Notification.Routes/NotificationRoute.js';
+
+
+// EMployee NOtifications
+import { EmployeeNotificationRouter } from './routes/Notification.Routes/Employee-Notification-Route/Employee-Notification-Route.js';
 
 // ─── Routes — Admin ──────────────────────────────────────────
 
 import AdminAuthRoutes from './Controller/Admin/Route/Admin.Auth.Router.js';
 import EmployeeManagementRouter from './Controller/Admin/Route/Employee-Managemnet.route.js';
+import { ClientNotificationRouter } from './routes/Notification.Routes/Client-Notification-Route/Client-Notification-Route.js';
+import { RecomendationNotificationRouter } from './routes/Notification.Routes/Recomendation-Notification-Route/Recomendation-Notification-Route.js';
 // import AllUserManagementRouter from './Controller/Admin/Routes/admin.AllUsermanagemen.Route.js';
 
 
@@ -170,8 +178,9 @@ if (process.env.NODE_ENV === 'development') {
 // Auth
 app.use('/api/v1/auth-user', AuthUserRouter);
 
-// Client
 
+
+// Client
 app.use('/api/v1/client-profiledata',  ClientProfileRoutes);
 app.use('/api/v1/jobs',                JobUploadForClientRouter);
 app.use('/api/v1/client/applications', ClientJobAplicationRouter);
@@ -186,15 +195,25 @@ app.use('/api/v1/employee',             GetAllJobAndApplyForEmployee);
 
 // Chat
 app.use('/api/v1/chat', chatRoutes);
-
 // Calls
 app.use('/api/v1/user/calls', CallRouter);
 
-// Notifications
+// Notifications   ->  Dismental and Unused from now on Clossing Soon
 app.use('/api/user/notifications', NotificationRouter);
 
-// Admin
 
+// Client-Notification
+app.use('/api/v1/client/notifications',ClientNotificationRouter);
+// Employee-Notification
+app.use('/api/v1/employee/notifications',EmployeeNotificationRouter);
+
+
+// Recomendation - ROute
+app.use('/api/both/recomendation',RecomendationNotificationRouter);
+
+
+
+// Admin
 app.use('/api/admin/auth',           AdminAuthRoutes);
 app.use('/api/admin/employeeManagement', EmployeeManagementRouter);
 
@@ -209,6 +228,8 @@ app.use('/api/admin/employeeManagement', EmployeeManagementRouter);
 // Test 
 import Testrouter from './routes/Test.Routes.js';
 import Certificaterouter from './routes/Certificate/CertificateRoute.js';
+
+
 
 // Dev only
 if (process.env.NODE_ENV === 'development') {
