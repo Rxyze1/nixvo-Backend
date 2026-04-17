@@ -347,7 +347,6 @@ export const handleWebhook = async (req, res) => {
         console.log('✅ Handled: subscription.authenticated');
         break;
       }
-
       case RAZORPAY_EVENTS.SUB_ACTIVATED: {
         const sub = await SubscriptionService.handleSubscriptionActivated(event);
         try {
@@ -355,6 +354,13 @@ export const handleWebhook = async (req, res) => {
           const { userId }   = subscription.notes;
           const user         = await User.findById(userId);
           if (user && sub) {
+            
+            // ✅ FIX: Update the User document to PREMIUM
+            await User.findByIdAndUpdate(userId, {
+              plan: sub.plan || 'premium',
+              subscriptionStatus: 'active',
+            });
+
             await sendSubscriptionActivated(
               user.email, user.fullname, sub.plan, sub.planPrice,
               sub.planActivatedAt, sub.planExpiresAt, sub.features,
@@ -368,7 +374,6 @@ export const handleWebhook = async (req, res) => {
         console.log('✅ Handled: subscription.activated — user is now PREMIUM');
         break;
       }
-
       case RAZORPAY_EVENTS.SUB_CHARGED: {
         const sub = await SubscriptionService.handleSubscriptionCharged(event);
         try {

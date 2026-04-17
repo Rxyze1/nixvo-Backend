@@ -41,16 +41,25 @@ export default class IntentDetector {
     const nlpData = this._analyzeGrammar(rawText);
     const intent = this._resolveIntent(stitchedText, nlpData);
 
-    // If completely innocent, skip plugins to save CPU
+    // ✅ Early exit for 100% safe messages (Skip ALL plugins)
     if (intent === 'INNOCENT_PROJECT_CONTEXT') {
       return null; 
     }
 
-    // Run plugins for DEMAND, HINGLISH, QUESTION, or UNKNOWN intents
+    // ✅ Run ALL plugins with 50ms Timeout Guard protection
     for (const plugin of PLUGINS) {
       try {
-        plugin.pattern.lastIndex = 0; // Critical for .test() state
-        if (plugin.pattern.test(stitchedText)) {
+        plugin.pattern.lastIndex = 0;
+        const startTime = Date.now();
+        const isBlocked = plugin.pattern.test(stitchedText);
+        
+        // If any regex takes more than 50ms, skip it to prevent lag
+        if (Date.now() - startTime > 50) {
+          console.warn(`   ⚠️ SLOW PLUGIN DETECTED: ${plugin.type} (took ${Date.now() - startTime}ms) - SKIPPED`);
+          continue; 
+        }
+        
+        if (isBlocked) {
           console.log(`   🧩 [Intent: ${intent}] Plugin triggered: ${plugin.type}`);
           return { blocked: true, reason: plugin.reason, type: plugin.type };
         }
@@ -61,7 +70,6 @@ export default class IntentDetector {
 
     return null; 
   }
-
   // ═══════════════════════════════════════════════════════════
   // 🔧 GRAMMAR EXTRACTOR
   // ═══════════════════════════════════════════════════════════
@@ -88,7 +96,7 @@ export default class IntentDetector {
     const SAFE_TOPICS = new Set(['project', 'work', 'task', 'payment', 'order', 'design', 'file', 'document', 'delivery', 'requirement', 'price', 'cost', 'proposal', 'contract', 'invoice']);
     const SAFE_ACTIONS = new Set(['discuss', 'talk', 'send', 'show', 'check', 'review', 'update', 'confirm', 'start', 'finish', 'create', 'make', 'build']);
     const MALICIOUS_VERBS = new Set(['call', 'dm', 'ping', 'text', 'ring', 'dial', 'vc']);
-    const MALICIOUS_NOUNS = new Set(['number', 'num', 'mobile', 'phone', 'contact', 'details', 'info', 'whatsapp', 'insta', 'telegram', 'personal']);
+    const MALICIOUS_NOUNS = new Set(['number', 'num', 'mobile', 'phone', 'contact', 'details', 'info', 'whatsapp', 'insta', 'telegram', 'personal', 'dm', 'dm karo', 'direct']);
 
     const hasSafeTopic = nouns.some(n => SAFE_TOPICS.has(n));
     const hasSafeAction = verbs.some(v => SAFE_ACTIONS.has(v));

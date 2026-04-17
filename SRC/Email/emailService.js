@@ -1,5 +1,8 @@
 // services/Email/emailService.js
 import { emailConfig, appConfig } from './emailConfig.js';
+
+
+import nodemailer from 'nodemailer';
 import {
     otpSignupTemplate,
     otpLoginTemplate,
@@ -73,70 +76,75 @@ import {
 
 /**
  * ════════════════════════════════════════════════════════════════
- *                    📧 EMAIL SERVICE (HTTP API)
- *              Uses Mailtrap HTTP API (Port 443 - Always Works!)
+ *                    📧 EMAIL SERVICE INITIALIZATION
+ *              Uses AWS SES SMTP (Port 587)
  * ════════════════════════════════════════════════════════════════
  */
 
-// Verify configuration on startup
 console.log('');
 console.log('════════════════════════════════════════════════════════════════');
 console.log('📧 EMAIL SERVICE INITIALIZATION');
 console.log('════════════════════════════════════════════════════════════════');
-console.log(`🌐 API URL:     ${emailConfig.apiUrl}`);
+console.log(`🌐 SMTP Host:   ${emailConfig.host}`);
+console.log(`🔌 Port:        ${emailConfig.port}`);
 console.log(`📤 From Email:  ${emailConfig.from.email}`);
 console.log(`📛 From Name:   ${emailConfig.from.name}`);
-console.log(`🔑 API Token:   ${emailConfig.apiToken ? '✅ Configured' : '❌ Missing'}`);
+console.log(`🔑 AWS User:    ${emailConfig.auth.user ? '✅ Configured' : '❌ Missing'}`);
+console.log(`🔑 AWS Pass:    ${emailConfig.auth.pass ? '✅ Configured' : '❌ Missing'}`);
 console.log('════════════════════════════════════════════════════════════════');
 console.log('');
 
+
 /**
  * ═══════════════════════════════════════════════════════════════
- *                      BASE SEND FUNCTION (HTTP API)
+ *                      BASE SEND FUNCTION (AWS SES SMTP)
  * ═══════════════════════════════════════════════════════════════
  */
+
+// Create transporter once outside the function for performance
+const transporter = nodemailer.createTransport({
+    host: emailConfig.host,
+    port: emailConfig.port,
+    auth: {
+        user: emailConfig.auth.user,
+        pass: emailConfig.auth.pass,
+    },
+    tls: {
+        rejectUnauthorized: false, // Keeps it simple, works on most servers
+    },
+});
+
 const sendEmail = async ({ to, subject, html, text = '', category = 'General' }) => {
     try {
         console.log(`📧 Sending: ${subject} → ${to}`);
 
-        const response = await fetch(emailConfig.apiUrl, {
-            method: 'POST',
+               // Automatically remove spaces for AWS SES tag rules
+        const cleanCategory = category.replace(/\s+/g, '');
+
+        const mailOptions = {
+            from: `"${emailConfig.from.name}" <${emailConfig.from.email}>`,
+            to: to,
+            subject: subject,
+            html: html,
+            text: text || subject,
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${emailConfig.apiToken}`,
-            },
-            body: JSON.stringify({
-                from: {
-                    email: emailConfig.from.email,
-                    name: emailConfig.from.name,
-                },
-                to: [{ email: to }],
-                subject,
-                html,
-                text: text || subject, // Fallback to subject if no text
-                category,
-            }),
-        });
+                'X-SES-MESSAGE-TAGS': `Category=${cleanCategory}` 
+            }
+        };
 
-        const data = await response.json();
+        const info = await transporter.sendMail(mailOptions);
 
-        if (!response.ok) {
-            console.error('❌ Mailtrap API Error:', JSON.stringify(data, null, 2));
-            throw new Error(data.errors?.[0] || 'Failed to send email');
-        }
-
-        console.log(`✅ Email sent successfully! Message ID: ${data.message_ids?.[0]}`);
+        console.log(`✅ Email sent successfully! Message ID: ${info.messageId}`);
 
         return {
             success: true,
-            messageId: data.message_ids?.[0],
+            messageId: info.messageId,
         };
     } catch (error) {
         console.error(`❌ Email failed: ${to} - ${error.message}`);
         throw new Error(`Failed to send email: ${error.message}`);
     }
 };
-
 /**
  * ═══════════════════════════════════════════════════════════════
  *                   OTP EMAILS (3 FUNCTIONS)

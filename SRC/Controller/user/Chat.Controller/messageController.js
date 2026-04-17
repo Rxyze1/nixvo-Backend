@@ -379,27 +379,31 @@ export const sendMessage = asyncHandler(async (req, res) => {
   const warnings  = [];
   const tempFiles = [];
 
+
   try {
 
-    // ── TEXT ────────────────────────────────────────────────
-    if (messageType === 'text') {
-      if (!text?.trim())
-        return badRequestResponse(res, '❌ Message text is required');
+       // ── TEXT (Always validate text first, no matter what files are attached) ──
+    let linkCheck = { allowed: false };
+    let validation = { blocked: false };
+
+    if (text?.trim()) {
       if (text.length > MAX_TEXT_LENGTH)
         return badRequestResponse(res, `❌ Message too long (max ${MAX_TEXT_LENGTH} characters)`);
 
-       // Run Link Check and Regex Validation in parallel (Saves milliseconds)
-      const [linkCheck, validation] = await Promise.all([
+      // Run Link Check and Regex Validation in parallel
+      const checkResults = await Promise.all([
         Promise.resolve(containsAllowedExternalLinks(text)),
-        chatSecurityService.validateTextMessage(text, currentUserId.toString()) // ✅ ADDED userId
+        chatSecurityService.validateTextMessage(text, currentUserId.toString())
       ]);
+      linkCheck = checkResults[0];
+      validation = checkResults[1];
 
       if (validation.blocked && !linkCheck.allowed) return badRequestResponse(res, validation.reason);
       if (validation.warning) warnings.push(validation.warning);
 
-
       messageData.content = { text: text.trim() };
 
+      // Handle reply logic
       if (replyToId) {
         const replyToMessage = await Message.findById(replyToId);
         if (!replyToMessage)
@@ -415,13 +419,18 @@ export const sendMessage = asyncHandler(async (req, res) => {
           createdAt:   replyToMessage.createdAt
         };
       }
+    } else if (!req.files || req.files.length === 0) {
+      return badRequestResponse(res, '❌ Please provide either a message or files');
+    }
+
+    // 🚨 SAFETY WALL: If text is blocked, STOP! Do not process images/videos.
+    if (validation.blocked) {
+      return badRequestResponse(res, validation.reason);
     }
 
     // ── IMAGES ──────────────────────────────────────────────
-    else if (messageType === 'image') {
+    if (detectedFiles.images.length > 0) {
       const imageFiles = detectedFiles.images;
-      if (imageFiles.length === 0)
-        return badRequestResponse(res, '❌ No valid images found');
       if (imageFiles.length > MAX_IMAGES_PER_MESSAGE)
         return badRequestResponse(res, `❌ Maximum ${MAX_IMAGES_PER_MESSAGE} images per message`);
 
@@ -470,14 +479,10 @@ export const sendMessage = asyncHandler(async (req, res) => {
       }
 
       messageData.images = uploadedImages;
-      if (text?.trim()) messageData.content = { text: text.trim() };
     }
-
     // ── VIDEO ───────────────────────────────────────────────
-    else if (messageType === 'video') {
+    if (detectedFiles.videos.length > 0) {
       const videoFile = detectedFiles.videos[0];
-      if (!videoFile)
-        return badRequestResponse(res, '❌ No valid video found');
       if (videoFile.size > MAX_VIDEO_SIZE)
         return badRequestResponse(res, `❌ Video exceeds ${MAX_VIDEO_SIZE / 1024 / 1024}MB`);
 
@@ -545,15 +550,11 @@ export const sendMessage = asyncHandler(async (req, res) => {
         uploadedAt: new Date(),
         processingStatus: 'completed'
       }];
-
-      if (text?.trim()) messageData.content = { text: text.trim() };
     }
 
     // ── FILES ───────────────────────────────────────────────
-    else if (messageType === 'file') {
+    if (detectedFiles.documents.length > 0) {
       const documentFiles = detectedFiles.documents;
-      if (documentFiles.length === 0)
-        return badRequestResponse(res, '❌ No valid files found');
       if (documentFiles.length > MAX_FILES_PER_MESSAGE)
         return badRequestResponse(res, `❌ Maximum ${MAX_FILES_PER_MESSAGE} files per message`);
 
@@ -583,23 +584,20 @@ export const sendMessage = asyncHandler(async (req, res) => {
       }
 
       messageData.files = uploadedFiles;
-      if (text?.trim()) messageData.content = { text: text.trim() };
     }
 
   } catch (processingError) {
-    // ✅ FIX (Bug 3): Do NOT call cleanupTempFiles here.
-    // The finally block below always runs — calling cleanup in BOTH catch
-    // and finally means two unlink attempts on every error path.
-    // cleanupTempFiles is idempotent (existsSync guard), so it won't crash,
-    // but it adds unnecessary I/O. Keep cleanup in ONE place: finally.
     console.error('❌ Message processing error:', processingError);
     return serverErrorResponse(res, processingError, 'Failed to process message');
   } finally {
-    // Runs on success AND on every error — single, authoritative cleanup point.
     if (tempFiles.length > 0) await cleanupTempFiles(tempFiles);
   }
-
   // ── Save to DB ───────────────────────────────────────────
+
+
+
+
+  
   // ── Save to DB & Fetch Profile Pic IN PARALLEL ──────────
   messageData.status      = 'sent';
   messageData.deliveredTo = [];
@@ -615,6 +613,15 @@ export const sendMessage = asyncHandler(async (req, res) => {
 
   const senderProfilePic = senderProfileDoc?.profilePic || currentUser.profilePic || null;
   console.log(`✅ Message saved: ${message._id}`);
+
+
+
+
+
+
+
+
+
 
   // ── Update conversation ──────────────────────────────────
   try {
@@ -794,16 +801,14 @@ export const getMessages = asyncHandler(async (req, res) => {
         select: 'fullname username profilePic userType'
       }
     })
-    .sort({ createdAt: -1 })   // oldest → newest within the fetched window
+    .sort({ createdAt: 1 })   // oldest → newest within the fetched window
     .limit(limitInt)
     .lean();
 
   
 
 
-// TO ✅
   console.log(`✅ Retrieved ${messages.length} messages`);
-  messages.reverse();
 
   // ✅ Enrich with shared helper
   const enrichedMessages = await enrichSendersWithBadges(messages);
@@ -891,9 +896,13 @@ export const getMessages = asyncHandler(async (req, res) => {
   //
   // For the very first load (no `before` cursor), hasMore tells the client
   // whether scroll-up will yield more messages.
-  const hasMore         = messages.length === limitInt;
-  const oldestMessageId = messages.length > 0 ? messages[0]._id              : null;
+  // ✅ FIX: Grab IDs FIRST while array is in DB order (oldest at [0], newest at [-1])
+  const oldestMessageId = messages.length > 0 ? messages[0]._id : null;
   const newestMessageId = messages.length > 0 ? messages[messages.length - 1]._id : null;
+  const hasMore         = messages.length === limitInt;
+
+  // ✅ FIX: NOW reverse so frontend gets newest at the bottom
+  messages.reverse();
 
   console.log(`📊 Total: ${totalMessages} | Fetched: ${messages.length} | hasMore: ${hasMore}\n`);
 
@@ -979,9 +988,11 @@ export const editMessage = asyncHandler(async (req, res) => {
   if (message.messageType !== 'text')
     return badRequestResponse(res, '❌ Only text messages can be edited');
 
+  // 🚨 SAFETY WALL: Block restricted text in edits
   const linkCheck  = containsAllowedExternalLinks(text);
   const validation = await chatSecurityService.validateTextMessage(text);
   if (validation.blocked && !linkCheck.allowed) return badRequestResponse(res, validation.reason);
+  if (validation.blocked) return badRequestResponse(res, validation.reason);
 
   message.content.text = text.trim();
   message.isEdited     = true;

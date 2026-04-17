@@ -36,7 +36,6 @@ const syncFromRazorpay = async (sub, userId) => {
     const rzpSub = await razorpay.subscriptions.fetch(sub.razorpaySubscriptionId);
 
     console.log(`🔍 Razorpay status for ${userId}: ${rzpSub.status}`);
-
     // ── Active on Razorpay but not in DB → sync up ──
     if (rzpSub.status === 'active' && sub.subscriptionStatus !== 'active') {
       console.log('⚠️  Webhook missed — syncing active from Razorpay');
@@ -48,6 +47,18 @@ const syncFromRazorpay = async (sub, userId) => {
         nextBillingDate:    new Date(rzpSub.end_at    * 1000),
         razorpaySubscriptionId: rzpSub.id,
       });
+
+      // ✅ FIX: Sync the User collection too so the app doesn't show "free"
+      try {
+        const User = (await import('../../Models/User/User.Model.js')).default;
+        await User.findByIdAndUpdate(userId, {
+          plan: sub.plan || 'premium',
+          subscriptionStatus: 'active',
+        });
+        console.log(`✅ User ${userId} synced to premium in User collection`);
+      } catch (userErr) {
+        console.warn('⚠️ Failed to sync User collection (non-critical):', userErr.message);
+      }
 
       // Return updated fields so req.isPremium is correct this request
       return {

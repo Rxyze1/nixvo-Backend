@@ -452,6 +452,7 @@ user: {
         activatedAt: client.subscription?.planActivatedAt || null,
         expiresAt: client.subscription?.planExpiresAt || null,
         isActive: isSubscriptionActive,
+         isPremium: isSubscriptionActive,
         daysRemaining: daysRemaining,
       };
 

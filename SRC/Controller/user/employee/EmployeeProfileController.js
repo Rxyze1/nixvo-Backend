@@ -547,13 +547,14 @@ export const createOrUpdateEmployeeProfile = async (req, res) => {
      
      // ── On first completion → AUTO-APPROVE employee instantly ──
      if (!wasAlreadyCompleted) {
-       // Update User document - keep active and mark as verified
+          // Update User document - keep active and mark as verified
        await User.findByIdAndUpdate(
          userId, 
          { 
-           status: 'active',           // Keep active, NOT pending!
-           isAdminVerified: true,      // Mark as verified
-           adminVerifiedAt: new Date() // Record when auto-approved
+           status: 'active',                     // Keep active, NOT pending!
+           isAdminVerified: true,                // Mark as verified
+           adminVerifiedAt: new Date(),           // Record when auto-approved
+           adminVerificationStatus: 'approved'    // ✅ FIX: Update the actual status field!
          }
        );
        

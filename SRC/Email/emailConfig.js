@@ -3,36 +3,32 @@
 /**
  * ════════════════════════════════════════════════════════════════
  *                    📧 EMAIL CONFIGURATION
- *   Mailtrap HTTP API (Works on all networks - Port 443)
+ *   AWS SES SMTP (Production Ready)
  * ════════════════════════════════════════════════════════════════
  */
 
 export const emailConfig = {
-    // ✅ Use HTTP API instead of SMTP
-    useHttpApi: true,
+    // ❌ Turn off Mailtrap HTTP API
+    useHttpApi: false,
     
-    // Mailtrap HTTP API endpoint
-    apiUrl: 'https://send.api.mailtrap.io/api/send',
-    apiToken: process.env.MAILTRAP_API_TOKEN,
-    
-    // Legacy SMTP config (not used when useHttpApi = true)
-    host: process.env.MAIL_HOST || 'send.api.mailtrap.io',
-    port: parseInt(process.env.MAIL_PORT) || 2525,
+    // ✅ AWS SES SMTP Configuration
+    host: process.env.AWS_SES_HOST || 'email-smtp.us-east-1.amazonaws.com',
+    port: parseInt(process.env.AWS_SES_PORT) || 587,
     auth: {
-        user: process.env.MAIL_USER || 'api',
-        pass: process.env.MAIL_PASS,
+        user: process.env.AWS_SES_USER,
+        pass: process.env.AWS_SES_PASS,
     },
     options: {
-        secure: false,
+        secure: false, // Use TLS (not implicit SSL)
         tls: {
-            rejectUnauthorized: false,
+            rejectUnauthorized: true, // Recommended for AWS SES
         },
     },
     
-    // Sender details
+    // Sender details (Using your new Nixvo domain)
     from: {
-        email: process.env.MAIL_FROM || 'hello@nixvo.in',
-        name: process.env.MAIL_FROM_NAME || 'Nixvo Team',
+        email: process.env.FROM_EMAIL || 'noreply@nixvo.in',
+        name: process.env.FROM_NAME || 'Nixvo',
     },
 };
 

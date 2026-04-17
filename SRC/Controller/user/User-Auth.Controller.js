@@ -201,7 +201,7 @@ export const verifySignupOTP = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(otpDoc.password, 12);
 
-    const user = await User.create({
+     const user = await User.create({
       fullname:        otpDoc.fullname.trim(),
       username:        otpDoc.username.toLowerCase(),
       email:           sanitizedEmail,
@@ -210,6 +210,8 @@ export const verifySignupOTP = async (req, res) => {
       userType:        otpDoc.userType,
 
       isEmailVerified: true,
+      isAdminVerified: otpDoc.userType === 'client',  // ✅ Auto-approve clients
+      adminVerificationStatus: otpDoc.userType === 'client' ? 'approved' : 'pending', // ✅ FIX
 
       status: 'active',
       
