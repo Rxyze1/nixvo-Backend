@@ -222,12 +222,10 @@ app.use('/api/admin/employeeManagement', EmployeeManagementRouter);
 
 
 
-
-
-
 // Test 
 import Testrouter from './routes/Test.Routes.js';
 import Certificaterouter from './routes/Certificate/CertificateRoute.js';
+import UpdateRouter from './routes/AppVersion.Route.js';
 
 
 
@@ -235,6 +233,11 @@ import Certificaterouter from './routes/Certificate/CertificateRoute.js';
 if (process.env.NODE_ENV === 'development') {
   app.use('/test', Testrouter);
 }
+
+
+
+app.use('/api/v1/app-version', UpdateRouter);
+
 
 
 // Certificate 
