@@ -334,17 +334,18 @@ ClientSchema.methods.hasPremium = async function () {
     const sub = this.subscription;
     if (!sub) return false;
 
+   // ✅ FIXED: Keep premium if cancelled but not yet expired
    return (
-  sub.plan !== 'free' &&
-  sub.subscriptionStatus === 'active' &&
-  new Date(sub.planExpiresAt) > new Date()
-);
+      sub.plan !== 'free' &&
+      ['active', 'cancelled'].includes(sub.subscriptionStatus) && 
+      sub.planExpiresAt && 
+      new Date(sub.planExpiresAt) > new Date()
+    );
   } catch (error) {
     console.error('hasPremium check failed:', error);
     return false;
   }
 };
-
 ClientSchema.post('findOneAndUpdate', async function (doc) {
   try {
     if (!doc) return;
@@ -378,11 +379,16 @@ ClientSchema.pre('save', async function () {
     console.error('Error updating isPremium cache:', error.message);
   }
 });
+
+
+
+
+
+
+
 // ═══════════════════════════════════════════════════════════════
 // EXPORT
-// ═══════════════════════════════════════════════════════════════
-
-
+// ════════════════════════════════════
 
 
 

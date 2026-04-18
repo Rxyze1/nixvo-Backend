@@ -358,7 +358,7 @@ EmployeeSchema.pre('save', async function () {
   try {
     const isAdminApproved = this.verificationDetails?.status === 'approved';
 
-    // ✅ Properly verify subscription — not just ObjectId presence
+    // ✅ Properly verify subscription — keep premium if cancelled but not expired
     let hasPremiumSub = false;
     if (this.subscription) {
       const sub = await mongoose.model('Subscription')
@@ -367,7 +367,8 @@ EmployeeSchema.pre('save', async function () {
 
       hasPremiumSub = sub
         && sub.plan !== 'free'
-        && sub.subscriptionStatus === 'active'
+        && ['active', 'cancelled'].includes(sub.subscriptionStatus) // ✅ FIXED
+        && sub.planExpiresAt // ✅ ADDED null safety
         && new Date() < new Date(sub.planExpiresAt);
     }
 
@@ -391,6 +392,8 @@ EmployeeSchema.pre('save', async function () {
   }
 });
 
+
+
 // ═══════════════════════════════════════════════════════════════
 // INSTANCE METHODS
 // ═══════════════════════════════════════════════════════════════
@@ -412,10 +415,10 @@ EmployeeSchema.methods.getReviewCount = function () {
 /**
  * ✅ Sync badge
  */
-// ✅ Fix syncBadge() — proper subscription check
 EmployeeSchema.methods.syncBadge = async function () {
   const isAdminApproved = this.verificationDetails?.status === 'approved';
 
+  // ✅ FIXED: keep premium if cancelled but not expired
   let hasPremiumSub = false;
   if (this.subscription) {
     const sub = await mongoose.model('Subscription')
@@ -424,7 +427,8 @@ EmployeeSchema.methods.syncBadge = async function () {
 
     hasPremiumSub = sub
       && sub.plan !== 'free'
-      && sub.subscriptionStatus === 'active'
+      && ['active', 'cancelled'].includes(sub.subscriptionStatus) // ✅ FIXED
+      && sub.planExpiresAt // ✅ ADDED null safety
       && new Date() < new Date(sub.planExpiresAt);
   }
 
@@ -445,9 +449,30 @@ EmployeeSchema.methods.syncBadge = async function () {
 
   return await this.save();
 };
+
+
+
+
+
+
+
+
+
+
+
+
 /**
  * ✅ Get verification details
  */
+
+
+
+
+
+
+
+
+
 EmployeeSchema.methods.getVerificationDetails = function () {
   return {
     blueVerified: this.blueVerified,

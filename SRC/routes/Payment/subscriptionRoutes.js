@@ -15,7 +15,7 @@ import { verifyRazorpayWebhook } from '../../Middleware/Payment-Middleware/webho
 const Subscriptionrouter = express.Router();
 
 // ── Public ──
-Subscriptionrouter.get('/plans', getPlans);
+Subscriptionrouter.get('/plans', protect, getPlans);
 
 // ── Webhook — NO protect ──
 Subscriptionrouter.post('/webhook',

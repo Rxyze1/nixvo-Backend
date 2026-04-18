@@ -454,14 +454,73 @@ export const handleWebhook = async (req, res) => {
 
 
 // ─────────────────────────────────────────────────────────────
-// 5️⃣  GET PLANS — public
+// 5️⃣  GET PLANS — Protected (Returns features based on userType)
 // ─────────────────────────────────────────────────────────────
+
+const UI_FEATURES = {
+  client: {
+    free: [
+      "5 job posts per month",
+      "Basic applicant view",
+      "Standard support",
+    ],
+    premium: [
+      "Unlimited applicant access",
+      // ✅ CHANGED TO OBJECT: Adds the blue verified badge!
+      { text: "Premium badge on profile", badge: true },
+      "Priority job visibility",
+      "Direct messaging with talent",
+      "Advanced analytics",
+      "Bulk upload resumes",
+    ],
+  },
+  employee: {
+    free: [
+      "10 job applications per month",
+      "Standard profile visibility",
+      "Standard support",
+    ],
+    premium: [
+      "Unlimited job applications",
+      // ✅ CHANGED TO OBJECT: Adds the blue verified badge!
+      { text: "Featured profile badge", badge: true },
+      "Priority support",
+      "Direct access to clients",
+      "Profile analytics",
+      "Custom branding",
+    ],
+  },
+};
+
 export const getPlans = async (req, res) => {
-  return res.status(200).json({
-    success: true,
-    data: {
-      client:   { free: { price: 0, label: 'Free' }, premium: { price: 49,  label: 'Premium' } },
-      employee: { free: { price: 0, label: 'Free' }, premium: { price: 149, label: 'Premium' } },
-    },
-  });
+  try {
+    const userType = req.userType;
+
+    if (!userType || !['client', 'employee'].includes(userType)) {
+      return res.status(400).json({ success: false, message: 'Invalid or missing user type' });
+    }
+
+    const userPlans = UI_FEATURES[userType] || {};
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        userType: userType,
+        free: {
+          price: 0,
+          label: 'Free',
+          features: userPlans.free || [],
+        },
+        premium: {
+          price: userType === 'client' ? 49 : 149,
+          label: 'Premium',
+          features: userPlans.premium || [],
+        },
+      },
+    });
+
+  } catch (error) {
+    console.error('❌ getPlans error:', error.message);
+    return res.status(500).json({ success: false, message: 'Failed to fetch plans' });
+  }
 };
