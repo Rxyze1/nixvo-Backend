@@ -795,13 +795,14 @@ export const getMessages = asyncHandler(async (req, res) => {
     .populate('senderId', 'fullname username userType email profilePic')
     .populate({
       path: 'replyTo.messageId',
+      
       select: 'content messageType senderId createdAt',
       populate: {
         path:   'senderId',
         select: 'fullname username profilePic userType'
       }
     })
-    .sort({ createdAt: 1 })   // oldest → newest within the fetched window
+    .sort({ createdAt: -1 })   // oldest → newest within the fetched window
     .limit(limitInt)
     .lean();
 
@@ -811,7 +812,7 @@ export const getMessages = asyncHandler(async (req, res) => {
   console.log(`✅ Retrieved ${messages.length} messages`);
 
   // ✅ Enrich with shared helper
-  const enrichedMessages = await enrichSendersWithBadges(messages);
+ const enrichedMessages = await enrichSendersWithBadges(messages);
 
   // ── Mark unread messages as read ─────────────────────────
 
@@ -897,12 +898,14 @@ export const getMessages = asyncHandler(async (req, res) => {
   // For the very first load (no `before` cursor), hasMore tells the client
   // whether scroll-up will yield more messages.
   // ✅ FIX: Grab IDs FIRST while array is in DB order (oldest at [0], newest at [-1])
-  const oldestMessageId = messages.length > 0 ? messages[0]._id : null;
-  const newestMessageId = messages.length > 0 ? messages[messages.length - 1]._id : null;
+const oldestMessageId = messages.length > 0 ? messages[messages.length - 1]._id : null;
+const newestMessageId = messages.length > 0 ? messages[0]._id : null;
+
+
   const hasMore         = messages.length === limitInt;
 
   // ✅ FIX: NOW reverse so frontend gets newest at the bottom
-  messages.reverse();
+enrichedMessages.reverse(); // ← now actually reverses what gets returned
 
   console.log(`📊 Total: ${totalMessages} | Fetched: ${messages.length} | hasMore: ${hasMore}\n`);
 

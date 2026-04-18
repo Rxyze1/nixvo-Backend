@@ -408,9 +408,8 @@ export const updatePortfolio = async (req, res) => {
   try {
     const userId = req.userId;
     
-    // ✅ Find portfolio by userId only
+    // 1. Find Portfolio
     const portfolio = await Portfolio.findOne({ userId });
-    
     if (!portfolio) {
       return res.status(404).json({
         success: false,
@@ -419,86 +418,62 @@ export const updatePortfolio = async (req, res) => {
       });
     }
     
-// TO ✅ — add them
-const employee = await Employee.findOne({ userId }).select('blueVerified').lean();
-const badgeType = employee?.blueVerified?.status === true ? 'premium' : 'free';
-portfolio.badgeType = badgeType;
-const maxImages = badgeType === 'premium' ? 24 : 6;
-const maxVideos = badgeType === 'premium' ? 20 : 4;
+    // 2. Get Limits (Do NOT set portfolio.badgeType manually)
+    const employee = await Employee.findOne({ userId }).select('blueVerified').lean();
+    const badgeType = employee?.blueVerified?.status === true ? 'premium' : 'free';
+    const maxImages = 10; 
+    const maxVideos = 5;
+    const maxVideoSize = 100 * 1024 * 1024;
 
-    // ✅ SAFE HANDLING - Check if req.body exists first
+    // 3. Parse Data safely
     let portfolioData = {};
-    
     if (req.body && req.body.data) {
-      // Form-data with 'data' field
       try {
         portfolioData = JSON.parse(req.body.data);
       } catch (parseError) {
-        return res.status(400).json({
-          success: false,
-          message: '❌ Invalid JSON in data field',
-          error: parseError.message
-        });
+        return res.status(400).json({ success: false, message: '❌ Invalid JSON in data field', error: parseError.message });
       }
     } else if (req.body && Object.keys(req.body).length > 0) {
-      // Direct JSON or form-data fields
       portfolioData = req.body;
-    } else if (!req.files || ((!req.files.images || req.files.images.length === 0) && (!req.files.videos || req.files.videos.length === 0))) {
-      // No body and no files
-      return res.status(400).json({
-        success: false,
-        message: '❌ No data provided to update'
-      });
     }
     
-    // ✅ Validate and update text fields
+    // 4. Check if empty request
+    const hasFiles = req.files && ((req.files.images?.length > 0) || (req.files.videos?.length > 0));
+    const hasData = Object.keys(portfolioData).length > 0;
+    if (!hasData && !hasFiles) {
+      return res.status(400).json({ success: false, message: '❌ No data provided to update' });
+    }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // 5. TEXT VALIDATION & UPDATING (THIS WAS MISSING!)
+    // ═══════════════════════════════════════════════════════════════
+    
     if (portfolioData.portfolioName) {
       if (portfolioData.portfolioName.length < 3 || portfolioData.portfolioName.length > 100) {
-        return res.status(400).json({
-          success: false,
-          message: '❌ Portfolio name must be 3-100 characters'
-        });
+        return res.status(400).json({ success: false, message: '❌ Portfolio name must be 3-100 characters' });
       }
-      
       const nameValidation = await validationService.validateContent(portfolioData.portfolioName, 'title');
       if (nameValidation.action === 'BLOCK' || nameValidation.blocked) {
-        return res.status(400).json({
-          success: false,
-          message: '🚫 Portfolio name contains prohibited content',
-          violations: nameValidation.violations
-        });
+        return res.status(400).json({ success: false, message: '🚫 Portfolio name contains prohibited content' });
       }
-      
       portfolio.portfolioName = portfolioData.portfolioName;
     }
     
     if (portfolioData.bio) {
       if (portfolioData.bio.length < 20 || portfolioData.bio.length > 1000) {
-        return res.status(400).json({
-          success: false,
-          message: '❌ Bio must be 20-1000 characters'
-        });
+        return res.status(400).json({ success: false, message: '❌ Bio must be 20-1000 characters' });
       }
-      
       const bioValidation = await validationService.validateBio(portfolioData.bio);
       if (bioValidation.action === 'BLOCK' || bioValidation.blocked) {
-        return res.status(400).json({
-          success: false,
-          message: '🚫 Bio contains prohibited content',
-          violations: bioValidation.violations
-        });
+        return res.status(400).json({ success: false, message: '🚫 Bio contains prohibited content' });
       }
-      
       portfolio.bio = portfolioData.bio;
     }
     
     if (portfolioData.workPrice) {
       const numericPrice = Number(portfolioData.workPrice);
       if (isNaN(numericPrice) || numericPrice <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: '❌ Work price must be a positive number'
-        });
+        return res.status(400).json({ success: false, message: '❌ Work price must be a positive number' });
       }
       portfolio.workPrice.amount = numericPrice;
     }
@@ -506,193 +481,134 @@ const maxVideos = badgeType === 'premium' ? 20 : 4;
     if (portfolioData.currency) {
       const validCurrencies = ['INR', 'USD', 'EUR', 'GBP', 'CAD', 'AUD'];
       if (!validCurrencies.includes(portfolioData.currency)) {
-        return res.status(400).json({
-          success: false,
-          message: '❌ Invalid currency',
-          validOptions: validCurrencies
-        });
+        return res.status(400).json({ success: false, message: '❌ Invalid currency' });
       }
       portfolio.workPrice.currency = portfolioData.currency;
     }
     
     if (portfolioData.skills) {
-      // Parse if it's a string
-      const skillsArray = Array.isArray(portfolioData.skills) 
-        ? portfolioData.skills 
-        : JSON.parse(portfolioData.skills);
-      
+      const skillsArray = Array.isArray(portfolioData.skills) ? portfolioData.skills : JSON.parse(portfolioData.skills);
       for (const skill of skillsArray) {
         const skillValidation = await validationService.validateContent(skill, 'skill');
         if (skillValidation.action === 'BLOCK' || skillValidation.blocked) {
-          return res.status(400).json({
-            success: false,
-            message: `🚫 Skill "${skill}" contains prohibited content`
-          });
+          return res.status(400).json({ success: false, message: `🚫 Skill "${skill}" contains prohibited content` });
         }
       }
       portfolio.skills = skillsArray;
     }
     
     if (portfolioData.tags) {
-      // Parse if it's a string
-      const tagsArray = Array.isArray(portfolioData.tags) 
-        ? portfolioData.tags 
-        : JSON.parse(portfolioData.tags);
-      
-      if (tagsArray.length > 10) {
-        return res.status(400).json({
-          success: false,
-          message: '❌ Maximum 10 tags allowed'
-        });
-      }
-      
+      const tagsArray = Array.isArray(portfolioData.tags) ? portfolioData.tags : JSON.parse(portfolioData.tags);
+      if (tagsArray.length > 10) return res.status(400).json({ success: false, message: '❌ Maximum 10 tags allowed' });
       for (const tag of tagsArray) {
         const tagValidation = await validationService.validateContent(tag, 'tag');
         if (tagValidation.action === 'BLOCK' || tagValidation.blocked) {
-          return res.status(400).json({
-            success: false,
-            message: `🚫 Tag "${tag}" contains prohibited content`
-          });
+          return res.status(400).json({ success: false, message: `🚫 Tag "${tag}" contains prohibited content` });
         }
       }
       portfolio.tags = tagsArray;
     }
     
-    if (portfolioData.category) {
-      // Parse if it's a string
-      const categoryArray = Array.isArray(portfolioData.category) 
-        ? portfolioData.category 
-        : JSON.parse(portfolioData.category);
-      
-      const validCategories = [
-        'videoEditors', 'audioEditors', 'thumbnailArtists', 'blenderArtists',
-        'AiArtists', 'VfxArtists', '3dVideoArtists', 'longEditors',
-        'ShortEditors', 'scriptWriters', 'videoEditorsAndAudioEditors', 'all'
-      ];
-      
-      const invalidCategories = categoryArray.filter(cat => !validCategories.includes(cat));
-      if (invalidCategories.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: '❌ Invalid categories found',
-          invalidCategories,
-          validCategories
+     if (portfolioData.category) {
+      try {
+        // ✅ Super safe parsing: handles Array, Stringified Array, and unexpected formats
+        let categoryArray = portfolioData.category;
+        if (typeof categoryArray === 'string') {
+          categoryArray = JSON.parse(categoryArray);
+        }
+        
+        // Ensure it's actually an array after parsing
+        if (!Array.isArray(categoryArray)) {
+          return res.status(400).json({ 
+            success: false, 
+            message: '❌ Category must be an array', 
+            received: typeof categoryArray 
+          });
+        }
+
+        const validCategories = ['videoEditors', 'audioEditors', 'thumbnailArtists', 'blenderArtists', 'AiArtists', 'VfxArtists', '3dVideoArtists', 'longEditors', 'ShortEditors', 'scriptWriters', 'videoEditorsAndAudioEditors', 'all'];
+        
+        const invalidCategories = categoryArray.filter(cat => !validCategories.includes(cat));
+        if (invalidCategories.length > 0) {
+          return res.status(400).json({ 
+            success: false, 
+            message: '❌ Invalid categories found', 
+            invalidCategories,
+            validOptions: validCategories
+          });
+        }
+        
+        portfolio.category = categoryArray;
+      } catch (parseError) {
+        return res.status(400).json({ 
+          success: false, 
+          message: '❌ Failed to read categories. Make sure you are sending a valid JSON array.', 
+          error: parseError.message 
         });
       }
-      portfolio.category = categoryArray;
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 6. FILE UPLOADS
+    // ═══════════════════════════════════════════════════════════════
     
-    // ✅ Add new images
     const newImageFiles = req.files?.images || [];
     if (newImageFiles.length > 0) {
-      const currentImageCount = portfolio.images.length;
-      const totalAfterAdd = currentImageCount + newImageFiles.length;
-      
+      const totalAfterAdd = portfolio.images.length + newImageFiles.length;
       if (totalAfterAdd > maxImages) {
-        return res.status(400).json({
-          success: false,
-          message: `❌ Cannot add ${newImageFiles.length} images. Current: ${currentImageCount}, Max: ${maxImages}`,
-          limit: maxImages
-        });
+        return res.status(400).json({ success: false, message: `❌ Image limit reached. Current: ${portfolio.images.length}, Max: ${maxImages}` });
       }
-      
       for (const file of newImageFiles) {
-        const validation = await imageValidator.validate(file.buffer, {
-          testMode: false,
-          isProfilePic: false,
-          filename: file.originalname
-        });
-        
+        const validation = await imageValidator.validate(file.buffer, { testMode: false, isProfilePic: false, filename: file.originalname });
         if (validation.action === 'BLOCK' || validation.blocked) {
-          return res.status(400).json({
-            success: false,
-            message: `🚫 Image "${file.originalname}" rejected`,
-            reason: validation.reason,
-            violations: validation.violations
-          });
+          return res.status(400).json({ success: false, message: `🚫 Image "${file.originalname}" rejected` });
         }
-        
-        const timestamp = Date.now();
-        const fileName = `portfolios/${userId}/${timestamp}-${file.originalname}`;
+        const fileName = `portfolios/${userId}/${Date.now()}-${file.originalname}`;
         const url = await uploadToR2(file.buffer, fileName, file.mimetype);
-        
-        portfolio.images.push({
-          url,
-          filename: file.originalname,
-          filesize: file.size,
-          mimetype: file.mimetype,
-          uploadedAt: new Date(),
-          validation: {
-            status: 'approved',
-            scannedAt: new Date(),
-            confidence: validation.confidence
-          }
-        });
+        portfolio.images.push({ url, filename: file.originalname, filesize: file.size, mimetype: file.mimetype, uploadedAt: new Date(), validation: { status: 'approved', scannedAt: new Date(), confidence: validation.confidence } });
       }
     }
     
-    // ✅ Add new videos
     const newVideoFiles = req.files?.videos || [];
     if (newVideoFiles.length > 0) {
-      const currentVideoCount = portfolio.videos.length;
-      const totalAfterAdd = currentVideoCount + newVideoFiles.length;
-      
+      const totalAfterAdd = portfolio.videos.length + newVideoFiles.length;
       if (totalAfterAdd > maxVideos) {
-        return res.status(400).json({
-          success: false,
-          message: `❌ Cannot add ${newVideoFiles.length} videos. Current: ${currentVideoCount}, Max: ${maxVideos}`,
-          limit: maxVideos
-        });
+        return res.status(400).json({ success: false, message: `❌ Video limit reached. Current: ${portfolio.videos.length}, Max: ${maxVideos}` });
       }
-      
       for (const file of newVideoFiles) {
-        if (file.size > 400 * 1024 * 1024) {
-          return res.status(400).json({
-            success: false,
-            message: `❌ Video "${file.originalname}" exceeds 400MB limit`,
-            filesize: `${(file.size / (1024 * 1024)).toFixed(2)}MB`
-          });
+        if (file.size > maxVideoSize) {
+          return res.status(400).json({ success: false, message: `❌ Video "${file.originalname}" exceeds 100MB limit` });
         }
-        
-        const timestamp = Date.now();
-        const fileName = `portfolios/${userId}/videos/${timestamp}-${file.originalname}`;
+        const fileName = `portfolios/${userId}/videos/${Date.now()}-${file.originalname}`;
         const url = await uploadToR2(file.buffer, fileName, file.mimetype);
-        
-        portfolio.videos.push({
-          url,
-          filename: file.originalname,
-          filesize: file.size,
-          mimetype: file.mimetype,
-          uploadedAt: new Date(),
-          validation: {
-            status: 'pending',
-            scannedAt: new Date()
-          }
-        });
+        portfolio.videos.push({ url, filename: file.originalname, filesize: file.size, mimetype: file.mimetype, uploadedAt: new Date(), validation: { status: 'pending', scannedAt: new Date() } });
       }
     }
     
-    // ✅ Remove images
+    // ═══════════════════════════════════════════════════════════════
+    // 7. REMOVING MEDIA
+    // ═══════════════════════════════════════════════════════════════
+    
     if (portfolioData.imageIdsToRemove) {
-      const idsToRemove = Array.isArray(portfolioData.imageIdsToRemove) 
-        ? portfolioData.imageIdsToRemove 
-        : JSON.parse(portfolioData.imageIdsToRemove);
-      
-      portfolio.images = portfolio.images.filter(
-        img => !idsToRemove.includes(img._id.toString())
-      );
+      const idsToRemove = Array.isArray(portfolioData.imageIdsToRemove) ? portfolioData.imageIdsToRemove : JSON.parse(portfolioData.imageIdsToRemove);
+      portfolio.images = portfolio.images.filter(img => !idsToRemove.includes(img._id.toString()));
     }
     
-    // ✅ Remove videos
     if (portfolioData.videoIdsToRemove) {
-      const idsToRemove = Array.isArray(portfolioData.videoIdsToRemove) 
-        ? portfolioData.videoIdsToRemove 
-        : JSON.parse(portfolioData.videoIdsToRemove);
-      
-      portfolio.videos = portfolio.videos.filter(
-        vid => !idsToRemove.includes(vid._id.toString())
-      );
+      const idsToRemove = Array.isArray(portfolioData.videoIdsToRemove) ? portfolioData.videoIdsToRemove : JSON.parse(portfolioData.videoIdsToRemove);
+      portfolio.videos = portfolio.videos.filter(vid => !idsToRemove.includes(vid._id.toString()));
     }
+    
+    // ═══════════════════════════════════════════════════════════════
+    // 8. FORCE SAVE & RETURN
+    // ═══════════════════════════════════════════════════════════════
+    
+    // markModified forces Mongoose to recognize array changes
+    portfolio.markModified('skills');
+    portfolio.markModified('tags');
+    portfolio.markModified('category');
+    portfolio.markModified('images');
+    portfolio.markModified('videos');
     
     await portfolio.save();
     
@@ -711,16 +627,8 @@ const maxVideos = badgeType === 'premium' ? 20 : 4;
         images: portfolio.images,
         videos: portfolio.videos,
         uploadLimits: {
-          images: {
-            current: portfolio.images.length,
-            max: maxImages,
-            remaining: maxImages - portfolio.images.length
-          },
-          videos: {
-            current: portfolio.videos.length,
-            max: maxVideos,
-            remaining: maxVideos - portfolio.videos.length
-          }
+          images: { current: portfolio.images.length, max: maxImages, remaining: maxImages - portfolio.images.length },
+          videos: { current: portfolio.videos.length, max: maxVideos, remaining: maxVideos - portfolio.videos.length }
         },
         updatedAt: portfolio.updatedAt
       }
@@ -732,19 +640,22 @@ const maxVideos = badgeType === 'premium' ? 20 : 4;
     if (error.name === 'ValidationError') {
       return res.status(400).json({
         success: false,
-        message: '❌ Validation error',
+        message: '❌ Database Validation Error',
         details: Object.values(error.errors).map(e => e.message)
       });
     }
     
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ success: false, message: '❌ Unauthorized - Invalid Token' });
+    }
+
     return res.status(500).json({
       success: false,
-      message: '❌ Failed to update portfolio',
+      message: '❌ Internal Server Error while updating portfolio',
       error: error.message
     });
   }
 };
-
 // ═══════════════════════════════════════════════════════════════
 // ✅ EXPORTS
 // ═══════════════════════════════════════════════════════════════

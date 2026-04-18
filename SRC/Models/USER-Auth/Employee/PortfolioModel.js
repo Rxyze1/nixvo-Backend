@@ -60,23 +60,38 @@ const portfolioSchema = new mongoose.Schema(
       },
     },
 
+
+      category: {
+      type: [{
+        type: String,
+        trim: true,
+      }],
+      default: [], // <--- NOW IT IS IN THE CORRECT PLACE!
+    },
+
     // ═══════════════════════════════════════════════════════════════
     // SKILLS & TAGS
     // ═══════════════════════════════════════════════════════════════
     
-    skills: [{
-      type: String,
-      trim: true,
-      maxlength: 50,
-    }],
+      skills: {
+      type: [{
+        type: String,
+        trim: true,
+        maxlength: 50,
+      }],
+      default: [],
+    },
 
-    tags: [{
-      type: String,
-      trim: true,
-      lowercase: true,
-      maxlength: 30,
-    }],
-
+    tags: {
+      type: [{
+        type: String,
+        trim: true,
+        lowercase: true,
+        maxlength: 30,
+      }],
+      default: [],
+    },
+    
     // ═══════════════════════════════════════════════════════════════
     // BADGE TYPE (FREE VS PREMIUM)
     // ═══════════════════════════════════════════════════════════════
