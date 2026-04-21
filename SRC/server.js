@@ -198,14 +198,23 @@ app.use('/api/v1/chat', chatRoutes);
 // Calls
 app.use('/api/v1/user/calls', CallRouter);
 
+
+
+
+
 // Notifications   ->  Dismental and Unused from now on Clossing Soon
 app.use('/api/user/notifications', NotificationRouter);
-
 
 // Client-Notification
 app.use('/api/v1/client/notifications',ClientNotificationRouter);
 // Employee-Notification
 app.use('/api/v1/employee/notifications',EmployeeNotificationRouter);
+
+// for firebase testing route
+app.use('/api/v1/noti',notirouter);
+
+
+
 
 
 // Recomendation - ROute
@@ -223,6 +232,7 @@ app.use('/api/admin/employeeManagement', EmployeeManagementRouter);
 import Testrouter from './routes/Test.Routes.js';
 import Certificaterouter from './routes/Certificate/CertificateRoute.js';
 import UpdateRouter from './routes/AppVersion.Route.js';
+import { notirouter } from './routes/noti.js';
 
 
 
@@ -240,6 +250,7 @@ app.use('/api/v1/app-version', UpdateRouter);
 // Certificate 
 
 app.use('/api/v1/certificate', Certificaterouter);
+
 
 
 

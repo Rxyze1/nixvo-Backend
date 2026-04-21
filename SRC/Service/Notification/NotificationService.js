@@ -22,6 +22,15 @@ export const createNotification = async (
   data = {}
 ) => {
   try {
+
+
+    // 🔥 ADD THESE LOGS TO CATCH THE HOOK:
+    console.log(`\n⚠️⚠️⚠️ [DB HOOK TRIGGERED] createNotification called! ⚠️⚠️⚠️`);
+    console.log(`📍 Target User ID: ${userId}`);
+    console.log(`📝 Type: ${type} | Title: ${title}`);
+    console.log(`📦 Data being sent to hook:`, JSON.stringify(data));
+
+
     // Inject navigation screen based on type
     let enrichedData = { ...data };
 
@@ -61,6 +70,11 @@ export const createNotification = async (
 export const createBulkNotifications = async (notifications) => {
   try {
     if (!notifications.length) return [];
+
+
+     // 🔥 ADD THESE LOGS:
+    console.log(`\n⚠️⚠️⚠️ [DB HOOK TRIGGERED] createBulkNotifications called! ⚠️⚠️⚠️`);
+    console.log(`📦 Sending ${notifications.length} notifications through the DB Hook`);
 
     // Inject navigation screen for bulk notifications
     const enrichedNotifications = notifications.map(notif => {

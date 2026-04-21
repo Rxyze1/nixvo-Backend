@@ -10,6 +10,7 @@ import Employee        from '../../../Models/USER-Auth/Employee-Model.js';
 import Client          from '../../../Models/USER-Auth/Client-Model.js';
 
 import { sendPushNotification } from '../Notification-Helper/pushSender.js';
+import { sendPush } from '../../../Service/Notification/firebasePushService.js';
 
 import {
   successResponse,
@@ -735,19 +736,16 @@ export const triggerEmployeePush = async (type, payload) => {
       if (payload.status === 'accepted') {
         title = `🎉 Congratulations!`;
         body = `You got the job: "${payload.jobTitle}"`;
-        
-        // ✅ MASSIVE FIX: Route to MessageScreen with Chat Data!
         navData = { 
-          screen: 'MessageScreen', // ✅ Was 'ApplicationStatus'
-          conversationId: payload.conversationId, // ✅ CRITICAL: Opens exact chat
-          senderId: payload.clientId || '', // ✅ ADDED: So header knows who it is
-          senderName: payload.clientName || 'Client', // ✅ ADDED: For header name
-          senderProfilePic: payload.clientProfilePic || '', // ✅ ADDED: For header photo
+          screen: 'MessageScreen', 
+          conversationId: payload.conversationId, 
+          senderId: payload.clientId || '', 
+          senderName: payload.clientName || 'Client', 
+          senderProfilePic: payload.clientProfilePic || '', 
         };
       } else {
         title = `📋 Application Update`;
         body = `Application for "${payload.jobTitle}" was ${payload.status}.`;
-        // Rejected applications can just go to the status screen
         navData = { screen: 'ApplicationStatus', appId: payload.applicationId };
       }
       break;
@@ -756,11 +754,11 @@ export const triggerEmployeePush = async (type, payload) => {
       title = `💬 ${payload.senderName || 'Someone'}`;
       body = payload.messagePreview || 'Sent you a message';
       navData = { 
-        screen: 'MessageScreen', // ✅ FIXED: Was 'ChatRoom'
+        screen: 'MessageScreen', 
         conversationId: payload.conversationId,
         senderId: payload.senderId || '',
-        senderName: payload.senderName || '', // ✅ ADDED
-        senderProfilePic: payload.senderProfilePic || '', // ✅ ADDED
+        senderName: payload.senderName || '', 
+        senderProfilePic: payload.senderProfilePic || '', 
         senderType: payload.senderType || '',
       };
       break;
@@ -775,7 +773,13 @@ export const triggerEmployeePush = async (type, payload) => {
       return;
   }
 
-  await sendPushNotification(payload.employeeId, title, body, navData);
+  // ✅ NEW CLEAN CALL -> Notice we pass payload.employeeId here!!!
+  await sendPush({ 
+      userId: payload.employeeId, // <--- EMPLOYEE ID
+      title, 
+      body, 
+      data: navData 
+  });
 };
 
 // ══════════════════════════════════════════════════════════════

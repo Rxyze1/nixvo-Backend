@@ -9,6 +9,7 @@ import Employee        from '../../../Models/USER-Auth/Employee-Model.js';
 import Client          from '../../../Models/USER-Auth/Client-Model.js';
 
 import { sendPushNotification } from '../Notification-Helper/pushSender.js';
+import { sendPush } from '../../../Service/Notification/firebasePushService.js';
 
 import {
   successResponse,
@@ -749,11 +750,11 @@ export const triggerClientPush = async (type, payload) => {
       title = `💬 ${payload.senderName || 'Someone'}`;
       body = payload.messagePreview || 'Sent you a message';
       navData = { 
-        screen: 'MessageScreen', // ✅ FIXED: Was 'ChatRoom'
+        screen: 'MessageScreen', 
         conversationId: payload.conversationId,
-        senderId: payload.senderId || '', // ✅ Keep this
-        senderName: payload.senderName || '', // ✅ ADDED: For chat header name
-        senderProfilePic: payload.senderProfilePic || '', // ✅ ADDED: For chat header photo
+        senderId: payload.senderId || '', 
+        senderName: payload.senderName || '', 
+        senderProfilePic: payload.senderProfilePic || '', 
         senderType: payload.senderType || '',
       };
       break;
@@ -762,9 +763,8 @@ export const triggerClientPush = async (type, payload) => {
       title = `✅ Hired!`;
       body = `You accepted ${payload.employeeName}'s application.`;
       navData = { 
-        screen: 'MessageScreen', // ✅ FIXED: Was 'ChatRoom'
+        screen: 'MessageScreen', 
         conversationId: payload.conversationId,
-        // ✅ CRITICAL FIX: Add these so the frontend knows WHO the Client is chatting with!
         senderId: payload.employeeId || payload.employeeUserId || '', 
         senderName: payload.employeeName || 'Employee',
         senderProfilePic: payload.employeeProfilePic || '',
@@ -776,8 +776,13 @@ export const triggerClientPush = async (type, payload) => {
       return;
   }
 
-  // EXECUTE SEND using the imported helper
-  await sendPushNotification(payload.clientId, title, body, navData);
+  // ✅ NEW CLEAN CALL -> Notice we pass payload.clientId here!!!
+  await sendPush({ 
+      userId: payload.clientId, 
+      title, 
+      body, 
+      data: navData 
+  });
 };
 
 // ═══════════════════════════════════════════════════════════════

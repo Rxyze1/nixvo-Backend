@@ -6,6 +6,11 @@ import Employee from '../../Models/USER-Auth/Employee-Model.js';
 import OTP from '../../Models/otpModel.js';
 import RefreshToken from '../../Models/RefreshTokenModel.js';
 import { validateContent } from '../../Service/validationService.js';
+
+import PushToken from '../../Models/Notification-Model/PushToken-Model.js';
+
+
+
 import {
   sendSignupOTP,
   sendResendOTP,
@@ -722,17 +727,11 @@ export const logout = async (req, res) => {
       );
 
       // 2. Nuke push token from database
+      // 2. Nuke push tokens from the CORRECT database
       try {
-        const result = await User.findByIdAndUpdate(
-          resolvedUserId,
-          { $unset: { expoPushToken: 1, pushTokenUpdatedAt: 1, pushTokenPlatform: 1 } }
-        );
-        
-        if (result) {
-          logger.info('Push token cleared', { userId: resolvedUserId });
-        } else {
-          logger.warn('User not found for token clear', { userId: resolvedUserId });
-        }
+        await PushToken.removeUserTokens(resolvedUserId);
+        logger.info('Push tokens wiped from DB on logout', { userId: resolvedUserId });
+        console.log(`✅ Push tokens cleared for user ${resolvedUserId} on logout`);
       } catch (tokenErr) {
         logger.error('Push token clear failed', tokenErr.message);
       }

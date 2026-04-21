@@ -30,6 +30,7 @@ import ffmpeg                          from 'fluent-ffmpeg';
 import fs                              from 'fs/promises';
 import fsSync                          from 'fs';
 import path                            from 'path';
+import { sendPush } from '../../../Service/Notification/firebasePushService.js';
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -716,17 +717,18 @@ export const sendMessage = asyncHandler(async (req, res) => {
 
       // 3. Save to Notification DB -> Model Hook handles the actual push!
          // 3. Save to Notification DB -> Model Hook handles the actual push!
-          await Notification.create({
-        userId: recipient._id,
-        type: 'message',
+            // ✅ NEW: Direct Firebase Push via our clean service
+      await sendPush({
+        userId: recipient._id, // <--- This ensures it goes to RUDRA, not 43emailname!
         title: `💬 ${currentUser.fullname}`,
-        message: messagePreview,
+        body: messagePreview,
         data: {
-          senderId: currentUserId.toString(), // ✅ MUST BE EXACTLY "senderId"
-          senderType: currentUser.userType,
-          senderProfilePic: senderProfilePic,
-          conversationId: conversation._id.toString(),
           screen: 'MessageScreen',
+          conversationId: conversation._id.toString(),
+          senderId: currentUserId.toString(),
+          senderName: currentUser.fullname,
+          senderProfilePic: senderProfilePic,
+          senderType: currentUser.userType,
         }
       });
 
@@ -738,8 +740,8 @@ export const sendMessage = asyncHandler(async (req, res) => {
     }
   }
   
-console.log('🔥🔥🔥🔥 MESSAGE CONTROLLER LOADED 🔥🔥🔥🔥');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  PUSH Notificatin SETUP  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+// console.log('🔥🔥🔥🔥 MESSAGE CONTROLLER LOADED 🔥🔥🔥🔥');
+//   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  PUSH Notificatin SETUP  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
 
 
 

@@ -28,15 +28,29 @@ export const sendPushNotificationsToUser = async ({
 
     // ✅ STEP 2: Handle EXPO GO Tokens (Old Way)
     if (expoTokens.length > 0) {
-      const expoPayload = expoTokens.map(tokenDoc => ({
-        to: tokenDoc.token,
-        sound: 'default',
-        title,
-        body,
-        data: { type, timestamp: new Date().toISOString(), ...data },
-        android: { channelId: 'default', priority: 'high' },
-        ios: { sound: true, badge: 1 }
-      }));
+
+      // const expoPayload = expoTokens.map(tokenDoc => ({
+      //   to: tokenDoc.token,
+      //   sound: 'default',
+      //   title,
+      //   body,
+      //   data: { type, timestamp: new Date().toISOString(), ...data },
+      //   android: { channelId: 'default', priority: 'high' },
+      //   ios: { sound: true, badge: 1 }
+      // }));
+
+      // AFTER (CORRECT):
+const expoPayload = expoTokens.map(tokenDoc => ({
+  to: tokenDoc.token,
+  sound: 'default',
+  title,
+  body,
+  data: { type, timestamp: new Date().toISOString(), ...data },
+  ios: { sound: true, badge: 1 }
+}));
+
+
+
 
       const expoResponse = await axios.post(EXPO_PUSH_API, expoPayload, {
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -59,13 +73,38 @@ export const sendPushNotificationsToUser = async ({
 
     // ✅ STEP 3: Handle PREBUILD (Firebase) Tokens (NEW WAY)
     if (fcmTokens.length > 0) {
+
+
+
+      // const fcmMessages = fcmTokens.map(tokenDoc => ({
+      //   token: tokenDoc.token,
+      //   notification: { title, body },
+      //   data: { type, timestamp: new Date().toISOString(), ...data },
+      //   android: { priority: 'high', channelId: 'default', sound: true },
+      //   apns: { payload: { aps: { sound: 'default', badge: 1 } } }
+      // }));
+
+
+
       const fcmMessages = fcmTokens.map(tokenDoc => ({
-        token: tokenDoc.token,
-        notification: { title, body },
-        data: { type, timestamp: new Date().toISOString(), ...data },
-        android: { priority: 'high', channelId: 'default', sound: true },
-        apns: { payload: { aps: { sound: 'default', badge: 1 } } }
-      }));
+  token: tokenDoc.token,
+  notification: { title, body },
+  data: { type, timestamp: new Date().toISOString(), ...data },
+  android: { 
+    priority: 'high', 
+    notification: {
+      clickAction: "com.takeshi001.Nixvo", // ADD THIS LINE: Forces it to open YOUR app
+      channelId: 'default',
+      sound: true
+    }
+  },
+  apns: { payload: { aps: { sound: 'default', badge: 1 } } }
+}));
+
+
+
+
+
 
       // Send via Firebase Admin
       const fcmResponse = await admin.messaging().sendEach(fcmMessages);
